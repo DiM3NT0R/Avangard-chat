@@ -1,0 +1,18 @@
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
+
+
+class ChatRoomCreate(BaseModel):
+    name: Optional[str] = None
+    is_group: bool = False
+    member_ids: List[str]
+
+
+class ChatRoomResponse(BaseModel):
+    id: str
+    name: Optional[str] = None
+    is_group: bool
+    member_ids: List[str]
+    created_at: datetime
+
