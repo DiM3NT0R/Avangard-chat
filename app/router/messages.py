@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import verify_token
 from app.schema.message import MessageCreate, MessageResponse, MessageUpdate
@@ -16,8 +16,8 @@ async def send_message(data: MessageCreate, user: dict = Depends(verify_token)):
 @router.get("/room/{room_id}", response_model=list[MessageResponse])
 async def get_history(
     room_id: str,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     user: dict = Depends(verify_token),
 ):
     messages = await MessageService.get_history(
