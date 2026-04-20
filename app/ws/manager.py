@@ -13,7 +13,10 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket, room_id: str):
         if room_id in self.rooms:
-            self.rooms[room_id].remove(websocket)
+            try:
+                self.rooms[room_id].remove(websocket)
+            except ValueError:
+                pass
 
     async def broadcast(self, room_id: str, message: dict):
         dead = []
