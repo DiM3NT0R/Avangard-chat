@@ -8,14 +8,10 @@ services:
     environment:
       - MONGODB_URL=mongodb://mongo:27017
       - DB_NAME=chat_db
-      - KEYCLOAK_URL=http://keycloak:8080
-      - KEYCLOAK_PUBLIC_URL=http://localhost:8080
-      - KEYCLOAK_REALM=avangard
-      - KEYCLOAK_CLIENT_ID=avangard.chat.org
+      - JWT_SECRET_KEY=change-me-access-secret
+      - REFRESH_TOKEN_SECRET_KEY=change-me-refresh-secret
     depends_on:
       mongodb:
-        condition: service_healthy
-      keycloak:
         condition: service_healthy
     healthcheck:
       test:
@@ -30,7 +26,6 @@ services:
       retries: 12
       start_period: 10s
     restart: unless-stopped
-
 
   mongodb:
     container_name: mongo
@@ -55,68 +50,5 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  keycloak:
-    container_name: keycloak
-    image: quay.io/keycloak/keycloak:24.0
-    command: start-dev --import-realm
-    environment:
-      - KC_HOSTNAME_URL=http://localhost:8080
-      - KC_PROXY=edge
-      - KC_HTTP_ENABLED=true
-      - KC_HEALTH_ENABLED=true
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
-      - KC_DB=postgres
-      - KC_DB_URL=jdbc:postgresql://postgres-db:5432/keycloak
-      - KC_DB_USERNAME=keycloak_user
-      - KC_DB_PASSWORD=keycloak_password
-    depends_on:
-      postgres-db:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-    volumes:
-      - ./infra/keycloak/realm-config.json:/opt/keycloak/data/import/realm-config.json
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "bash",
-          "-ec",
-          "exec 3<>/dev/tcp/127.0.0.1/8080; printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; head -n 1 <&3 | grep -q '200'",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 30s
-
-  postgres-db:
-    image: postgres:14.2
-    container_name: postgres-db
-    environment:
-      - POSTGRES_USER=postgres_user
-      - POSTGRES_PASSWORD=postgres_pass
-      - PGUSER=postgres_user
-    healthcheck:
-      test: [
-        "CMD",
-        "pg_isready",
-        "-d",
-        "keycloak",
-        "-U",
-        "postgres_user",
-      ]
-      interval: 5s
-      timeout: 10s
-      retries: 120
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./infra/keycloak/init-keycloak-db.sql:/docker-entrypoint-initdb.d/init-keycloak-db.sql
-
-
 volumes:
-  postgres_data:
   mongo_data:
