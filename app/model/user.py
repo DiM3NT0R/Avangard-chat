@@ -11,7 +11,7 @@ class User(Document):
     email: EmailStr
     avatar_url: Optional[str] = None
     is_online: bool = False
-    created_at: datetime = datetime.now(UTC)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_time_online: Optional[datetime] = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -30,4 +30,3 @@ class User(Document):
     class Settings:
         name = "users"
         indexes = ["username", "email", "full_name"]
-

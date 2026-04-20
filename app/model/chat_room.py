@@ -1,6 +1,7 @@
 from beanie import Document, Link
 from typing import List, Optional
 from datetime import datetime, UTC
+from pydantic import Field
 from app.model.user import User
 
 
@@ -9,7 +10,7 @@ class ChatRoom(Document):
     is_group: bool = False
     members: List[Link[User]] = []
     created_by: Link[User]
-    created_at: datetime = datetime.now(UTC)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     async def to_response(self) -> dict:
         await self.fetch_all_links()

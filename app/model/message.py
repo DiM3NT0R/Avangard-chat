@@ -15,7 +15,7 @@ class Message(Document):
     is_edited: bool = False
     is_deleted: bool = False
     read_by: List[Link[User]] = Field(default_factory=list)
-    created_at: datetime = datetime.now(UTC)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     async def to_response(self) -> dict:
         await self.fetch_all_links()
@@ -34,5 +34,4 @@ class Message(Document):
     class Settings:
         name = "messages"
         indexes = ["room", "created_at"]
-
 
