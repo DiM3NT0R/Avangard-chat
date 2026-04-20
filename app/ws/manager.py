@@ -16,8 +16,14 @@ class ConnectionManager:
             self.rooms[room_id].remove(websocket)
 
     async def broadcast(self, room_id: str, message: dict):
+        dead = []
         for ws in self.rooms.get(room_id, []):
-            await ws.send_json(message)
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws, room_id)
 
 
 manager = ConnectionManager()
