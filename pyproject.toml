@@ -17,5 +17,17 @@ dependencies = [
   "websockets==13.0",
 ]
 
+[dependency-groups]
+dev = [
+  "ruff>=0.11,<0.12",
+]
+
 [tool.uv]
 package = false
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

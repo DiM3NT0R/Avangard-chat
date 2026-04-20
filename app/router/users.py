@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
-from app.schema.user import UserResponse
-from app.model.user import User
+from fastapi import APIRouter, Depends, HTTPException
+
 from app.dependencies import verify_token
+from app.model.user import User
+from app.schema.user import UserResponse
 
 router = APIRouter()
 

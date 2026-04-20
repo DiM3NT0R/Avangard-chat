@@ -1,7 +1,9 @@
-from beanie import Document, Link
+from datetime import UTC, datetime
 from typing import List, Optional
-from datetime import datetime, UTC
+
+from beanie import Document, Link
 from pydantic import Field
+
 from app.model.user import User
 
 

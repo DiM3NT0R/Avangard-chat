@@ -1,9 +1,10 @@
-from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie
+from motor.motor_asyncio import AsyncIOMotorClient
+
 from app.config import settings
-from app.model.user import User
 from app.model.chat_room import ChatRoom
 from app.model.message import Message
+from app.model.user import User
 
 
 async def init_db():

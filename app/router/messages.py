@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
-from app.schema.message import MessageCreate, MessageUpdate, MessageResponse
-from app.service.message_service import MessageService
+from fastapi import APIRouter, Depends, HTTPException
+
 from app.dependencies import verify_token
+from app.schema.message import MessageCreate, MessageResponse, MessageUpdate
+from app.service.message_service import MessageService
 
 router = APIRouter()
 
@@ -13,13 +14,26 @@ async def send_message(data: MessageCreate, user: dict = Depends(verify_token)):
 
 
 @router.get("/room/{room_id}", response_model=list[MessageResponse])
-async def get_history(room_id: str, limit: int = 50, offset: int = 0, user: dict = Depends(verify_token)):
-    messages = await MessageService.get_history(room_id=room_id, limit=limit, offset=offset)
+async def get_history(
+    room_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    user: dict = Depends(verify_token),
+):
+    messages = await MessageService.get_history(
+        room_id=room_id,
+        limit=limit,
+        offset=offset,
+    )
     return [await message.to_response() for message in messages]
 
 
 @router.patch("/{message_id}", response_model=MessageResponse)
-async def edit_message(message_id: str, data: MessageUpdate, user: dict = Depends(verify_token)):
+async def edit_message(
+    message_id: str,
+    data: MessageUpdate,
+    user: dict = Depends(verify_token),
+):
     message = await MessageService.edit(message_id=message_id, data=data)
     if not message:
         raise HTTPException(status_code=404, detail="Message not found")
@@ -30,4 +44,3 @@ async def edit_message(message_id: str, data: MessageUpdate, user: dict = Depend
 async def delete_message(message_id: str, user: dict = Depends(verify_token)):
     await MessageService.delete(message_id=message_id)
     return {"ok": True}
-

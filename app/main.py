@@ -1,11 +1,13 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.openapi.utils import get_openapi
-from contextlib import asynccontextmanager
-from app.database import init_db
-from app.router import users, rooms, messages
-from app.ws.manager import manager
-from app.dependencies import verify_token
+
 from app.config import settings
+from app.database import init_db
+from app.dependencies import verify_token
+from app.router import messages, rooms, users
+from app.ws.manager import manager
 
 
 @asynccontextmanager

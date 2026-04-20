@@ -30,7 +30,12 @@ class RoomService:
         user = await User.find_one(User.id == user_id)
         if not user:
             return []
-        return await ChatRoom.find(Or(ChatRoom.members.id == user.id, ChatRoom.created_by.id == user.id)).to_list()
+        return await ChatRoom.find(
+            Or(
+                ChatRoom.members.id == user.id,
+                ChatRoom.created_by.id == user.id,
+            )
+        ).to_list()
 
     @staticmethod
     async def delete_room(room_id: str) -> bool:
@@ -39,4 +44,3 @@ class RoomService:
             return False
         await room.delete()
         return True
-

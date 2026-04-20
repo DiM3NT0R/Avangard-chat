@@ -1,7 +1,8 @@
-from beanie import Document
-from pydantic import EmailStr, ConfigDict, Field
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Optional
+
+from beanie import Document
+from pydantic import ConfigDict, EmailStr, Field
 
 
 class User(Document):

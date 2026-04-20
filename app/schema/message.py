@@ -1,7 +1,7 @@
+from datetime import datetime
 from typing import List
 
 from pydantic import BaseModel
-from datetime import datetime
 
 
 class MessageCreate(BaseModel):

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.dependencies import verify_token
 from app.schema.chat_room import ChatRoomCreate, ChatRoomResponse
 from app.service.room_service import RoomService
-from app.dependencies import verify_token
 
 router = APIRouter()
 

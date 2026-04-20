@@ -1,12 +1,12 @@
+from functools import lru_cache
+
 import httpx
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2AuthorizationCodeBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
+
 from app.config import settings
-from functools import lru_cache
-
 from app.model.user import User
-
 
 oauth2_scheme = OAuth2AuthorizationCodeBearer(
     authorizationUrl=(
