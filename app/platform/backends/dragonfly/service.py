@@ -180,10 +180,14 @@ class DragonflyService:
         user_key = keys.ws_presence_user_conn(
             self._prefix, user_id, room_id, connection_id
         )
+        online_key = keys.ws_presence_room_online_zset(self._prefix, room_id)
+        online_member = keys.ws_presence_conn_member(user_id, connection_id)
         ttl = self._settings.ws.presence_ttl_seconds
+        expires_at = int(datetime.now(UTC).timestamp()) + ttl
         try:
             await self._adapter.set_text(room_key, "1", ttl_seconds=ttl)
             await self._adapter.set_text(user_key, "1", ttl_seconds=ttl)
+            await self._adapter.zadd(online_key, online_member, expires_at)
         except DRAGONFLY_BACKEND_ERRORS as exc:
             await self._handle_backend_failure(
                 policy=self._settings.dragonfly.fail_policy.ws_presence,
@@ -204,10 +208,14 @@ class DragonflyService:
         user_key = keys.ws_presence_user_conn(
             self._prefix, user_id, room_id, connection_id
         )
+        online_key = keys.ws_presence_room_online_zset(self._prefix, room_id)
+        online_member = keys.ws_presence_conn_member(user_id, connection_id)
         ttl = self._settings.ws.presence_ttl_seconds
+        expires_at = int(datetime.now(UTC).timestamp()) + ttl
         try:
             await self._adapter.touch(room_key, ttl)
             await self._adapter.touch(user_key, ttl)
+            await self._adapter.zadd(online_key, online_member, expires_at)
         except DRAGONFLY_BACKEND_ERRORS as exc:
             await self._handle_backend_failure(
                 policy=self._settings.dragonfly.fail_policy.ws_presence,
@@ -228,9 +236,12 @@ class DragonflyService:
         user_key = keys.ws_presence_user_conn(
             self._prefix, user_id, room_id, connection_id
         )
+        online_key = keys.ws_presence_room_online_zset(self._prefix, room_id)
+        online_member = keys.ws_presence_conn_member(user_id, connection_id)
         try:
             await self._adapter.delete(room_key)
             await self._adapter.delete(user_key)
+            await self._adapter.zrem(online_key, online_member)
         except DRAGONFLY_BACKEND_ERRORS as exc:
             await self._handle_backend_failure(
                 policy=self._settings.dragonfly.fail_policy.ws_presence,
@@ -239,9 +250,13 @@ class DragonflyService:
             )
 
     async def list_room_online_users(self, room_id: str) -> list[str]:
-        pattern = keys.ws_presence_room_conn_pattern(self._prefix, room_id)
+        online_key = keys.ws_presence_room_online_zset(self._prefix, room_id)
+        now_unix = int(datetime.now(UTC).timestamp())
         try:
-            conn_keys = await self._adapter.scan_keys(pattern)
+            await self._adapter.zremrangebyscore(online_key, "-inf", str(now_unix))
+            members = await self._adapter.zrangebyscore(
+                online_key, f"({now_unix}", "+inf"
+            )
         except DRAGONFLY_BACKEND_ERRORS as exc:
             await self._handle_backend_failure(
                 policy=self._settings.dragonfly.fail_policy.ws_presence,
@@ -251,12 +266,12 @@ class DragonflyService:
             return []
 
         online_users: set[str] = set()
-        for key in conn_keys:
-            parts = key.split(":")
-            try:
-                user_idx = parts.index("user")
-                user_id = parts[user_idx + 1]
-            except (ValueError, IndexError):
+        for member in members:
+            parts = member.split(":", maxsplit=1)
+            if len(parts) != 2:
+                continue
+            user_id, connection_id = parts
+            if not user_id or not connection_id:
                 continue
             if user_id:
                 online_users.add(user_id)
