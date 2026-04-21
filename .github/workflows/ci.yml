@@ -15,6 +15,14 @@ jobs:
         image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.27.1
         ports:
           - 6380:6379
+      typesense:
+        image: typesense/typesense:27.1
+        env:
+          TYPESENSE_DATA_DIR: /tmp
+          TYPESENSE_API_KEY: ci-typesense-key
+          TYPESENSE_ENABLE_CORS: "true"
+        ports:
+          - 8109:8108
 
     steps:
       - name: Checkout code
@@ -44,6 +52,22 @@ jobs:
               raise SystemExit("Dragonfly did not become ready in time")
           PY
 
+      - name: Wait for Typesense
+        run: |
+          python - <<'PY'
+          import socket
+          import time
+
+          for _ in range(120):
+              try:
+                  with socket.create_connection(("127.0.0.1", 8109), timeout=1):
+                      break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise SystemExit("Typesense did not become ready in time")
+          PY
+
       - name: Run Ruff
         run: uv run --group dev ruff check .
 
@@ -53,6 +77,11 @@ jobs:
       - name: Run tests
         env:
           DRAGONFLY_URL: redis://localhost:6380/15
+          TYPESENSE_URL: http://localhost:8109
+          TYPESENSE_API_KEY: ci-typesense-key
+          MESSAGE_ENCRYPTION_ACTIVE_KEY_ID: v1
+          MESSAGE_ENCRYPTION_KEYS: '{"v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}'
+          REQUIRE_TYPESENSE_INTEGRATION: "1"
         run: uv run --group dev pytest
 
       - name: Build and wait for all services

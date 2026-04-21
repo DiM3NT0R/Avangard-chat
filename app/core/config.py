@@ -1,6 +1,8 @@
+import base64
+import json
 from typing import Literal
 
-from pydantic import BaseModel, IPvAnyNetwork, field_validator
+from pydantic import BaseModel, Field, IPvAnyNetwork, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 FailPolicy = Literal["open", "closed"]
@@ -91,6 +93,24 @@ class AuthStateSettings(BaseModel):
     authz_cache_ttl_seconds: int
 
 
+class TypesenseTimeoutSettings(BaseModel):
+    connect_seconds: float
+    read_seconds: float
+
+
+class TypesenseSettings(BaseModel):
+    url: str
+    api_key: str
+    collection_messages: str
+    timeout: TypesenseTimeoutSettings
+    fail_policy: FailPolicy
+
+
+class MessageEncryptionSettings(BaseModel):
+    active_key_id: str
+    keys: dict[str, str]
+
+
 class ProxySettings(BaseModel):
     trust_forwarded_headers: bool
     trusted_proxy_cidrs: tuple[IPvAnyNetwork, ...]
@@ -109,6 +129,13 @@ class Settings(BaseSettings):
     dragonfly_fail_policy_ws_pubsub: FailPolicy = "open"
     dragonfly_fail_policy_ws_presence: FailPolicy = "open"
     dragonfly_fail_policy_authz_cache: FailPolicy = "open"
+
+    typesense_url: str = "http://typesense:8108"
+    typesense_api_key: str = "change-me-typesense-key"
+    typesense_collection_messages: str = "messages"
+    typesense_connect_timeout_seconds: float = 2.0
+    typesense_read_timeout_seconds: float = 2.0
+    typesense_fail_policy: FailPolicy = "closed"
 
     jwt_secret_key: str
     refresh_token_secret_key: str
@@ -150,6 +177,13 @@ class Settings(BaseSettings):
     auth_refresh_lock_ttl_seconds: int = 5
     authz_cache_ttl_seconds: int = 60
 
+    message_encryption_active_key_id: str = "v1"
+    message_encryption_keys: dict[str, str] = Field(
+        default_factory=lambda: {
+            "v1": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
+        }
+    )
+
     model_config = SettingsConfigDict(env_file=".env")
 
     @field_validator("trusted_proxy_cidrs", mode="before")
@@ -158,6 +192,47 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return tuple(part.strip() for part in value.split(",") if part.strip())
         return value
+
+    @field_validator("message_encryption_keys", mode="before")
+    @classmethod
+    def _parse_message_encryption_keys(cls, value: object) -> object:
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return {}
+            if raw.startswith("{"):
+                return json.loads(raw)
+            parsed: dict[str, str] = {}
+            for pair in raw.split(","):
+                key_id, separator, encoded_key = pair.partition(":")
+                if not separator:
+                    raise ValueError(
+                        "Invalid message_encryption_keys entry, expected key_id:base64"
+                    )
+                parsed[key_id.strip()] = encoded_key.strip()
+            return parsed
+        return value
+
+    @model_validator(mode="after")
+    def _validate_message_encryption(self) -> "Settings":
+        if not self.message_encryption_keys:
+            raise ValueError("message_encryption_keys must not be empty")
+        if self.message_encryption_active_key_id not in self.message_encryption_keys:
+            raise ValueError(
+                "message_encryption_active_key_id must exist in message_encryption_keys"
+            )
+        for key_id, encoded_key in self.message_encryption_keys.items():
+            try:
+                decoded = base64.b64decode(encoded_key, validate=True)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"message_encryption_keys[{key_id}] must be valid base64"
+                )
+            if len(decoded) != 32:
+                raise ValueError(
+                    f"message_encryption_keys[{key_id}] must decode to 32 bytes"
+                )
+        return self
 
     @property
     def database(self) -> DatabaseSettings:
@@ -182,6 +257,19 @@ class Settings(BaseSettings):
                 ws_presence=self.dragonfly_fail_policy_ws_presence,
                 authz_cache=self.dragonfly_fail_policy_authz_cache,
             ),
+        )
+
+    @property
+    def typesense(self) -> TypesenseSettings:
+        return TypesenseSettings(
+            url=self.typesense_url,
+            api_key=self.typesense_api_key,
+            collection_messages=self.typesense_collection_messages,
+            timeout=TypesenseTimeoutSettings(
+                connect_seconds=self.typesense_connect_timeout_seconds,
+                read_seconds=self.typesense_read_timeout_seconds,
+            ),
+            fail_policy=self.typesense_fail_policy,
         )
 
     @property
@@ -247,6 +335,13 @@ class Settings(BaseSettings):
             user_cutoff_ttl_seconds=self.auth_user_cutoff_ttl_seconds,
             refresh_lock_ttl_seconds=self.auth_refresh_lock_ttl_seconds,
             authz_cache_ttl_seconds=self.authz_cache_ttl_seconds,
+        )
+
+    @property
+    def message_encryption(self) -> MessageEncryptionSettings:
+        return MessageEncryptionSettings(
+            active_key_id=self.message_encryption_active_key_id,
+            keys=self.message_encryption_keys,
         )
 
     @property
