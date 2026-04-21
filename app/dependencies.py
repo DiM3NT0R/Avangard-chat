@@ -6,6 +6,9 @@ from jwt import InvalidTokenError
 
 from app.model.user import User
 from app.security import decode_access_token
+from app.service.auth_service import AuthService
+from app.service.message_service import MessageService
+from app.service.room_service import RoomService
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -27,3 +30,17 @@ async def verify_token(token: str = Depends(get_bearer_token)) -> dict:
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     return payload
+
+
+def get_room_service() -> RoomService:
+    return RoomService()
+
+
+def get_message_service(
+    room_service: RoomService = Depends(get_room_service),
+) -> MessageService:
+    return MessageService(room_service=room_service)
+
+
+def get_auth_service() -> AuthService:
+    return AuthService()

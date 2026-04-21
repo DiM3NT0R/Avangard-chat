@@ -11,48 +11,45 @@ from app.service.room_service import RoomService
 
 
 class MessageService:
-    @staticmethod
-    async def _get_room_or_404(room_id: str) -> ChatRoom:
+    def __init__(self, room_service: RoomService):
+        self.room_service = room_service
+
+    async def _get_room_or_404(self, room_id: str) -> ChatRoom:
         room = await ChatRoom.get(room_id)
         if not room:
             raise HTTPException(status_code=404, detail="Room not found")
         return room
 
-    @staticmethod
-    async def _get_sender_or_404(sender_id: str) -> User:
+    async def _get_sender_or_404(self, sender_id: str) -> User:
         sender = await User.find_one(User.id == sender_id)
         if not sender:
             raise HTTPException(status_code=404, detail="Sender not found")
         return sender
 
-    @staticmethod
-    async def _get_message_or_404(message_id: str) -> Message:
+    async def _get_message_or_404(self, message_id: str) -> Message:
         message = await Message.get(message_id)
         if not message:
             raise HTTPException(status_code=404, detail="Message not found")
         return message
 
-    @staticmethod
-    async def _ensure_message_owner(message: Message, user_id: str) -> None:
+    async def _ensure_message_owner(self, message: Message, user_id: str) -> None:
         if linked_document_id(message.sender) != user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to modify this message",
             )
 
-    @staticmethod
-    async def send(data: MessageCreate, sender_id: str) -> Message:
-        room = await RoomService.get_for_user(data.room_id, sender_id)
-        sender = await MessageService._get_sender_or_404(sender_id)
+    async def send(self, data: MessageCreate, sender_id: str) -> Message:
+        room = await self.room_service.get_for_user(data.room_id, sender_id)
+        sender = await self._get_sender_or_404(sender_id)
         message = Message(room=room, sender=sender, text=data.text)
         await message.insert()
         return message
 
-    @staticmethod
     async def get_history(
-        room_id: str, user_id: str, limit: int = 50, offset: int = 0
+        self, room_id: str, user_id: str, limit: int = 50, offset: int = 0
     ) -> list[Message]:
-        room = await RoomService.get_for_user(room_id, user_id)
+        room = await self.room_service.get_for_user(room_id, user_id)
         return await (
             Message.find({"room": linked_document_ref(ChatRoom.Settings.name, room.id)})
             .skip(offset)
@@ -60,19 +57,17 @@ class MessageService:
             .to_list()
         )
 
-    @staticmethod
-    async def edit(message_id: str, data: MessageUpdate, user_id: str) -> Message:
-        message = await MessageService._get_message_or_404(message_id)
-        await MessageService._ensure_message_owner(message, user_id)
+    async def edit(self, message_id: str, data: MessageUpdate, user_id: str) -> Message:
+        message = await self._get_message_or_404(message_id)
+        await self._ensure_message_owner(message, user_id)
         message.text = data.text
         message.is_edited = True
         message.edited_at = datetime.now(UTC)
         await message.save()
         return message
 
-    @staticmethod
-    async def delete(message_id: str, user_id: str) -> None:
-        message = await MessageService._get_message_or_404(message_id)
-        await MessageService._ensure_message_owner(message, user_id)
+    async def delete(self, message_id: str, user_id: str) -> None:
+        message = await self._get_message_or_404(message_id)
+        await self._ensure_message_owner(message, user_id)
         message.is_deleted = True
         await message.save()

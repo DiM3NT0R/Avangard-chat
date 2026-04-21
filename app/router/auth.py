@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.config import settings
-from app.dependencies import verify_token
+from app.dependencies import get_auth_service, verify_token
 from app.rate_limit import auth_rate_limiter
 from app.schema.auth import AuthResponse, LoginRequest, RegisterRequest, TokenResponse
 from app.schema.user import serialize_user_response
@@ -40,14 +40,19 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=AuthResponse)
-async def register(data: RegisterRequest, request: Request, response: Response):
+async def register(
+    data: RegisterRequest,
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     client_ip = _client_ip(request)
     auth_rate_limiter.check(
         bucket_key=f"register:{client_ip}",
         limit=settings.auth_rate_limit_max_attempts,
         window_seconds=settings.auth_rate_limit_window_seconds,
     )
-    user, access_token, refresh_token = await AuthService.register(
+    user, access_token, refresh_token = await auth_service.register(
         data=data,
         user_agent=request.headers.get("user-agent"),
         ip_address=client_ip,
@@ -60,14 +65,19 @@ async def register(data: RegisterRequest, request: Request, response: Response):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(data: LoginRequest, request: Request, response: Response):
+async def login(
+    data: LoginRequest,
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     client_ip = _client_ip(request)
     auth_rate_limiter.check(
         bucket_key=f"login:{client_ip}:{data.username}",
         limit=settings.auth_rate_limit_max_attempts,
         window_seconds=settings.auth_rate_limit_window_seconds,
     )
-    user, access_token, refresh_token = await AuthService.login(
+    user, access_token, refresh_token = await auth_service.login(
         data=data,
         user_agent=request.headers.get("user-agent"),
         ip_address=client_ip,
@@ -80,7 +90,11 @@ async def login(data: LoginRequest, request: Request, response: Response):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(request: Request, response: Response):
+async def refresh(
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
+):
     client_ip = _client_ip(request)
     auth_rate_limiter.check(
         bucket_key=f"refresh:{client_ip}",
@@ -88,7 +102,7 @@ async def refresh(request: Request, response: Response):
         window_seconds=settings.auth_rate_limit_window_seconds,
     )
     refresh_token = request.cookies.get(settings.refresh_cookie_name)
-    _, access_token, new_refresh_token = await AuthService.refresh(
+    _, access_token, new_refresh_token = await auth_service.refresh(
         refresh_token=refresh_token or "",
         user_agent=request.headers.get("user-agent"),
         ip_address=client_ip,
@@ -98,8 +112,12 @@ async def refresh(request: Request, response: Response):
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response):
-    await AuthService.logout(request.cookies.get(settings.refresh_cookie_name))
+async def logout(
+    request: Request,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    await auth_service.logout(request.cookies.get(settings.refresh_cookie_name))
     _clear_refresh_cookie(response)
     return {"ok": True}
 
@@ -109,8 +127,9 @@ async def logout_all(
     request: Request,
     response: Response,
     token: dict = Depends(verify_token),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
-    await AuthService.revoke_all_user_sessions(token["sub"])
-    await AuthService.logout(request.cookies.get(settings.refresh_cookie_name))
+    await auth_service.revoke_all_user_sessions(token["sub"])
+    await auth_service.logout(request.cookies.get(settings.refresh_cookie_name))
     _clear_refresh_cookie(response)
     return {"ok": True}

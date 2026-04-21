@@ -65,14 +65,19 @@ async def _send_ping(websocket: WebSocket) -> None:
     )
 
 
-async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
+async def handle_room_chat(
+    websocket: WebSocket,
+    room_id: str,
+    room_service: RoomService,
+    message_service: MessageService,
+) -> None:
     subprotocols = list(websocket.scope.get("subprotocols", []))
 
     try:
         _require_chat_subprotocol(subprotocols)
         token = _extract_bearer_token(subprotocols)
         payload = await verify_token(token)
-        await RoomService.get_for_user(room_id, payload["sub"])
+        await room_service.get_for_user(room_id, payload["sub"])
 
         ws_connection_rate_limiter.check(
             bucket_key=f"ws-connect:{payload['sub']}",
@@ -159,7 +164,7 @@ async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
                 break
 
             try:
-                message = await MessageService.send(
+                message = await message_service.send(
                     data=message_input,
                     sender_id=payload["sub"],
                 )

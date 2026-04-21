@@ -8,8 +8,7 @@ from app.schema.chat_room import ChatRoomCreate
 
 
 class RoomService:
-    @staticmethod
-    async def create(data: ChatRoomCreate, creator_id: str) -> ChatRoom:
+    async def create(self, data: ChatRoomCreate, creator_id: str) -> ChatRoom:
         creator = await User.find_one(User.id == creator_id)
         if not creator:
             raise HTTPException(status_code=401, detail="Invalid user")
@@ -22,19 +21,16 @@ class RoomService:
         await room.insert()
         return room
 
-    @staticmethod
-    async def get(room_id: str) -> ChatRoom | None:
+    async def get(self, room_id: str) -> ChatRoom | None:
         return await ChatRoom.get(room_id)
 
-    @staticmethod
-    async def _get_room_or_404(room_id: str) -> ChatRoom:
+    async def _get_room_or_404(self, room_id: str) -> ChatRoom:
         room = await ChatRoom.get(room_id)
         if not room:
             raise HTTPException(status_code=404, detail="Room not found")
         return room
 
-    @staticmethod
-    async def _ensure_room_access(room: ChatRoom, user_id: str) -> None:
+    async def _ensure_room_access(self, room: ChatRoom, user_id: str) -> None:
         if linked_document_id(room.created_by) == user_id:
             return
         if any(linked_document_id(member) == user_id for member in room.members):
@@ -44,22 +40,19 @@ class RoomService:
             detail="You do not have permission to access this room",
         )
 
-    @staticmethod
-    async def _ensure_room_owner(room: ChatRoom, user_id: str) -> None:
+    async def _ensure_room_owner(self, room: ChatRoom, user_id: str) -> None:
         if linked_document_id(room.created_by) != user_id:
             raise HTTPException(
                 status_code=403,
                 detail="You do not have permission to delete this room",
             )
 
-    @staticmethod
-    async def get_for_user(room_id: str, user_id: str) -> ChatRoom:
-        room = await RoomService._get_room_or_404(room_id)
-        await RoomService._ensure_room_access(room, user_id)
+    async def get_for_user(self, room_id: str, user_id: str) -> ChatRoom:
+        room = await self._get_room_or_404(room_id)
+        await self._ensure_room_access(room, user_id)
         return room
 
-    @staticmethod
-    async def list_all_by_user(user_id: str) -> list[ChatRoom]:
+    async def list_all_by_user(self, user_id: str) -> list[ChatRoom]:
         user_ref = linked_document_ref(User.Settings.name, user_id)
         return await ChatRoom.find(
             {
@@ -70,8 +63,7 @@ class RoomService:
             }
         ).to_list()
 
-    @staticmethod
-    async def delete_room(room_id: str, user_id: str) -> None:
-        room = await RoomService._get_room_or_404(room_id)
-        await RoomService._ensure_room_owner(room, user_id)
+    async def delete_room(self, room_id: str, user_id: str) -> None:
+        room = await self._get_room_or_404(room_id)
+        await self._ensure_room_owner(room, user_id)
         await room.delete()

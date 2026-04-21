@@ -22,23 +22,20 @@ from app.security import (
 
 
 class AuthService:
-    @staticmethod
-    def _as_utc(value: datetime) -> datetime:
+    def _as_utc(self, value: datetime) -> datetime:
         return value if value.tzinfo else value.replace(tzinfo=UTC)
 
-    @staticmethod
-    async def _get_user_by_id(user_id: str) -> User:
+    async def _get_user_by_id(self, user_id: str) -> User:
         user = await User.find_one(User.id == user_id)
         if not user:
             raise HTTPException(status_code=401, detail="Invalid credentials")
         return user
 
-    @staticmethod
-    async def _get_user_by_username(username: str) -> Optional[User]:
+    async def _get_user_by_username(self, username: str) -> Optional[User]:
         return await User.find_one(User.username == username)
 
-    @staticmethod
     async def _create_refresh_session(
+        self,
         user_id: str,
         user_agent: str | None,
         ip_address: str | None,
@@ -59,8 +56,8 @@ class AuthService:
         await session.insert()
         return session, refresh_token
 
-    @staticmethod
     async def register(
+        self,
         data: RegisterRequest,
         user_agent: str | None,
         ip_address: str | None,
@@ -77,7 +74,7 @@ class AuthService:
         except DuplicateKeyError:
             raise HTTPException(status_code=409, detail="Username is already taken")
 
-        _, refresh_token = await AuthService._create_refresh_session(
+        _, refresh_token = await self._create_refresh_session(
             user_id=user.id,
             user_agent=user_agent,
             ip_address=ip_address,
@@ -85,19 +82,19 @@ class AuthService:
         access_token = create_access_token(user.id, user.username)
         return user, access_token, refresh_token
 
-    @staticmethod
     async def login(
+        self,
         data: LoginRequest,
         user_agent: str | None,
         ip_address: str | None,
     ) -> tuple[User, str, str]:
-        user = await AuthService._get_user_by_username(data.username)
+        user = await self._get_user_by_username(data.username)
         if not verify_password_or_dummy(
             data.password, user.password_hash if user else None
         ):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        _, refresh_token = await AuthService._create_refresh_session(
+        _, refresh_token = await self._create_refresh_session(
             user_id=user.id,
             user_agent=user_agent,
             ip_address=ip_address,
@@ -105,8 +102,8 @@ class AuthService:
         access_token = create_access_token(user.id, user.username)
         return user, access_token, refresh_token
 
-    @staticmethod
     async def refresh(
+        self,
         refresh_token: str,
         user_agent: str | None,
         ip_address: str | None,
@@ -126,14 +123,14 @@ class AuthService:
             raise invalid_session_error
 
         now = datetime.now(UTC)
-        expires_at = AuthService._as_utc(session.expires_at)
+        expires_at = self._as_utc(session.expires_at)
         if session.revoked_at or expires_at <= now:
-            await AuthService.revoke_all_user_sessions(session.user_id)
+            await self.revoke_all_user_sessions(session.user_id)
             raise invalid_session_error
 
-        user = await AuthService._get_user_by_id(session.user_id)
+        user = await self._get_user_by_id(session.user_id)
 
-        new_session, new_refresh_token = await AuthService._create_refresh_session(
+        new_session, new_refresh_token = await self._create_refresh_session(
             user_id=user.id,
             user_agent=user_agent,
             ip_address=ip_address,
@@ -147,8 +144,7 @@ class AuthService:
         access_token = create_access_token(user.id, user.username)
         return user, access_token, new_refresh_token
 
-    @staticmethod
-    async def logout(refresh_token: str | None) -> None:
+    async def logout(self, refresh_token: str | None) -> None:
         if not refresh_token:
             return
 
@@ -168,8 +164,7 @@ class AuthService:
             session.revoked_at = datetime.now(UTC)
             await session.save()
 
-    @staticmethod
-    async def revoke_all_user_sessions(user_id: str) -> None:
+    async def revoke_all_user_sessions(self, user_id: str) -> None:
         sessions = await RefreshSession.find(
             RefreshSession.user_id == user_id,
             RefreshSession.revoked_at == None,  # noqa: E711
