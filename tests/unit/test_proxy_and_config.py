@@ -10,6 +10,7 @@ def _base_settings_kwargs() -> dict[str, object]:
         "mongodb_url": "mongodb://localhost:27017",
         "jwt_secret_key": "access-secret",
         "refresh_token_secret_key": "refresh-secret",
+        "message_cursor_secret_key": "cursor-secret",
         "message_encryption_keys": {
             "v1": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
         },
@@ -94,5 +95,15 @@ def test_settings_require_message_encryption_keys(
     monkeypatch.delenv("MESSAGE_ENCRYPTION_KEYS", raising=False)
     kwargs = _base_settings_kwargs()
     kwargs.pop("message_encryption_keys")
+    with pytest.raises(ValidationError):
+        Settings(**kwargs)
+
+
+def test_settings_require_message_cursor_secret_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("MESSAGE_CURSOR_SECRET_KEY", raising=False)
+    kwargs = _base_settings_kwargs()
+    kwargs.pop("message_cursor_secret_key")
     with pytest.raises(ValidationError):
         Settings(**kwargs)
