@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
+from app.modules.system.dependencies import get_dragonfly_service, get_typesense_service
 from app.modules.users.model import User
 from app.platform.backends.dragonfly.service import DragonflyService
 from app.platform.backends.typesense.service import TypesenseService
-from app.platform.http.dependencies import get_dragonfly_service, get_typesense_service
 
 router = APIRouter()
 

@@ -9,16 +9,16 @@ from app.modules.auth.schemas import (
     TokenResponse,
 )
 from app.modules.auth.service import AuthService
-from app.modules.users.schemas import serialize_user_response
-from app.platform.backends.dragonfly.rate_limit import RateLimitService
-from app.platform.config.settings import settings
-from app.platform.http.client_ip import resolve_client_ip
-from app.platform.http.dependencies import (
+from app.modules.system.dependencies import (
     get_auth_service,
     get_rate_limit_service,
     verify_optional_token,
     verify_token,
 )
+from app.modules.users.schemas import serialize_user_response
+from app.platform.backends.dragonfly.rate_limit import RateLimitService
+from app.platform.config.settings import settings
+from app.platform.http.client_ip import resolve_client_ip
 
 router = APIRouter()
 

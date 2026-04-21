@@ -7,22 +7,40 @@ on:
     branches: ["main"]
 
 jobs:
-  build-and-test:
+  lint-and-architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Ruff
+        run: uv run --group dev ruff check .
+
+      - name: Check formatting
+        run: uv run --group dev ruff format --check .
+
+      - name: Check architecture import boundaries
+        run: uv run --group dev python scripts/check_architecture_imports.py
+
+  test-api-and-unit:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: [lint-and-architecture]
     services:
       dragonfly:
         image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.27.1
         ports:
           - 6380:6379
-      typesense:
-        image: typesense/typesense:27.1
-        env:
-          TYPESENSE_DATA_DIR: /tmp
-          TYPESENSE_API_KEY: ci-typesense-key
-          TYPESENSE_ENABLE_CORS: "true"
-        ports:
-          - 8109:8108
 
     steps:
       - name: Checkout code
@@ -52,6 +70,80 @@ jobs:
               raise SystemExit("Dragonfly did not become ready in time")
           PY
 
+      - name: Run unit and API tests
+        env:
+          DRAGONFLY_URL: redis://localhost:6380/15
+        run: uv run --group dev pytest tests/unit tests/api
+
+  test-integration-dragonfly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-and-architecture]
+    services:
+      dragonfly:
+        image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.27.1
+        ports:
+          - 6380:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Wait for Dragonfly
+        run: |
+          python - <<'PY'
+          import socket
+          import time
+
+          for _ in range(120):
+              try:
+                  with socket.create_connection(("127.0.0.1", 6380), timeout=1):
+                      break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise SystemExit("Dragonfly did not become ready in time")
+          PY
+
+      - name: Run Dragonfly integration tests
+        env:
+          DRAGONFLY_URL: redis://localhost:6380/15
+        run: uv run --group dev pytest tests/integration/dragonfly
+
+  test-integration-typesense:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [lint-and-architecture]
+    services:
+      typesense:
+        image: typesense/typesense:27.1
+        env:
+          TYPESENSE_DATA_DIR: /tmp
+          TYPESENSE_API_KEY: ci-typesense-key
+          TYPESENSE_ENABLE_CORS: "true"
+        ports:
+          - 8109:8108
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Wait for Typesense
         run: |
           python - <<'PY'
@@ -68,21 +160,26 @@ jobs:
               raise SystemExit("Typesense did not become ready in time")
           PY
 
-      - name: Run Ruff
-        run: uv run --group dev ruff check .
-
-      - name: Check formatting
-        run: uv run --group dev ruff format --check .
-
-      - name: Run tests
+      - name: Run Typesense integration tests
         env:
-          DRAGONFLY_URL: redis://localhost:6380/15
           TYPESENSE_URL: http://localhost:8109
           TYPESENSE_API_KEY: ci-typesense-key
-          MESSAGE_ENCRYPTION_ACTIVE_KEY_ID: v1
-          MESSAGE_ENCRYPTION_KEYS: '{"v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}'
           REQUIRE_TYPESENSE_INTEGRATION: "1"
-        run: uv run --group dev pytest
+        run: uv run --group dev pytest tests/integration/typesense
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs:
+      [
+        test-api-and-unit,
+        test-integration-dragonfly,
+        test-integration-typesense,
+      ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Build and wait for all services
         run: docker compose up -d --build --wait --wait-timeout 180

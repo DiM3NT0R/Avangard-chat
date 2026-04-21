@@ -2,15 +2,15 @@ from fastapi import APIRouter, Depends, WebSocket
 
 from app.modules.messages.service import MessageService
 from app.modules.rooms.service import RoomService
-from app.modules.ws.handler import handle_room_chat
-from app.platform.backends.dragonfly.rate_limit import RateLimitService
-from app.platform.backends.dragonfly.service import DragonflyService
-from app.platform.http.dependencies import (
+from app.modules.system.dependencies import (
     get_dragonfly_service,
     get_message_service,
     get_rate_limit_service,
     get_room_service,
 )
+from app.modules.ws.handler import handle_room_chat
+from app.platform.backends.dragonfly.rate_limit import RateLimitService
+from app.platform.backends.dragonfly.service import DragonflyService
 
 router = APIRouter()
 

@@ -6,7 +6,7 @@ from app.modules.messages.schemas import (
     MessageUpdate,
 )
 from app.modules.messages.service import MessageService
-from app.platform.http.dependencies import get_message_service, verify_token
+from app.modules.system.dependencies import get_message_service, verify_token
 
 router = APIRouter()
 

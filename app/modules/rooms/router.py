@@ -6,7 +6,7 @@ from app.modules.rooms.schemas import (
     serialize_chat_room_response,
 )
 from app.modules.rooms.service import RoomService
-from app.platform.http.dependencies import get_room_service, verify_token
+from app.modules.system.dependencies import get_room_service, verify_token
 
 router = APIRouter()
 

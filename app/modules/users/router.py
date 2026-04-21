@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.modules.system.dependencies import verify_token
 from app.modules.users.model import User
 from app.modules.users.schemas import UserResponse, serialize_user_response
-from app.platform.http.dependencies import verify_token
 
 router = APIRouter()
 

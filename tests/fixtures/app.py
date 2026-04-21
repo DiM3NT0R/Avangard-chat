@@ -99,7 +99,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         lambda: fake_typesense,
     )
     monkeypatch.setattr(
-        "app.platform.http.dependencies.get_typesense_service_singleton",
+        "app.modules.system.dependencies.get_typesense_service_singleton",
         lambda: fake_typesense,
     )
 

@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.modules.messages.schemas import MessageCreate
 from app.modules.messages.service import MessageService
 from app.modules.rooms.service import RoomService
+from app.modules.system.dependencies import validate_access_token
 from app.modules.ws.manager import manager
 from app.modules.ws.protocol import (
     WsErrorEvent,
@@ -28,7 +29,6 @@ from app.platform.backends.dragonfly.rate_limit import RateLimitService
 from app.platform.backends.dragonfly.service import DragonflyService
 from app.platform.config.settings import settings
 from app.platform.http.client_ip import resolve_client_ip
-from app.platform.http.dependencies import validate_access_token
 
 AUTH_SUBPROTOCOL_PREFIX = "auth.bearer."
 CHAT_SUBPROTOCOL = "chat.v1"

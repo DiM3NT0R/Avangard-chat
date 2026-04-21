@@ -7,12 +7,12 @@ from app.modules.auth import router as auth
 from app.modules.messages import router as messages
 from app.modules.rooms import router as rooms
 from app.modules.system import health_router as health
+from app.modules.system.database import init_db
 from app.modules.users import router as users
 from app.modules.ws import router as ws
 from app.modules.ws.manager import manager
 from app.platform.backends.dragonfly.container import get_dragonfly_service_singleton
 from app.platform.backends.typesense.container import get_typesense_service_singleton
-from app.platform.persistence.database import init_db
 
 
 @asynccontextmanager
