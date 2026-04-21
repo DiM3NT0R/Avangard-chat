@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from app.config import settings
 from app.dependencies import verify_token
 from app.rate_limit import ws_connection_rate_limiter, ws_message_rate_limiter
-from app.schema.message import MessageCreate
+from app.schema.message import MessageCreate, serialize_message_response
 from app.schema.ws import (
     WsErrorEvent,
     WsErrorPayload,
@@ -180,7 +180,7 @@ async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
                     break
                 continue
 
-            message_payload = await message.to_response()
+            message_payload = serialize_message_response(message)
             await manager.broadcast(
                 room_id,
                 jsonable_encoder(WsMessageCreatedEvent(payload=message_payload)),

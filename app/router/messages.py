@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.dependencies import verify_token
-from app.schema.message import MessageCreate, MessageResponse, MessageUpdate
+from app.schema.message import (
+    MessageCreate,
+    MessageResponse,
+    MessageUpdate,
+    serialize_message_response,
+)
 from app.service.message_service import MessageService
 
 router = APIRouter()
@@ -10,7 +15,7 @@ router = APIRouter()
 @router.post("", response_model=MessageResponse)
 async def send_message(data: MessageCreate, user: dict = Depends(verify_token)):
     message = await MessageService.send(data=data, sender_id=user["sub"])
-    return await message.to_response()
+    return serialize_message_response(message)
 
 
 @router.get("/room/{room_id}", response_model=list[MessageResponse])
@@ -26,7 +31,7 @@ async def get_history(
         limit=limit,
         offset=offset,
     )
-    return [await message.to_response() for message in messages]
+    return [serialize_message_response(message) for message in messages]
 
 
 @router.patch("/{message_id}", response_model=MessageResponse)
@@ -40,7 +45,7 @@ async def edit_message(
         data=data,
         user_id=user["sub"],
     )
-    return await message.to_response()
+    return serialize_message_response(message)
 
 
 @router.delete("/{message_id}")

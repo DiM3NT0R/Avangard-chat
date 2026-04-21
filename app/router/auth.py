@@ -6,6 +6,7 @@ from app.config import settings
 from app.dependencies import verify_token
 from app.rate_limit import auth_rate_limiter
 from app.schema.auth import AuthResponse, LoginRequest, RegisterRequest, TokenResponse
+from app.schema.user import serialize_user_response
 from app.service.auth_service import AuthService
 
 router = APIRouter()
@@ -52,7 +53,10 @@ async def register(data: RegisterRequest, request: Request, response: Response):
         ip_address=client_ip,
     )
     _set_refresh_cookie(response, refresh_token)
-    return AuthResponse(access_token=access_token, user=user.to_response())
+    return AuthResponse(
+        access_token=access_token,
+        user=serialize_user_response(user),
+    )
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -69,7 +73,10 @@ async def login(data: LoginRequest, request: Request, response: Response):
         ip_address=client_ip,
     )
     _set_refresh_cookie(response, refresh_token)
-    return AuthResponse(access_token=access_token, user=user.to_response())
+    return AuthResponse(
+        access_token=access_token,
+        user=serialize_user_response(user),
+    )
 
 
 @router.post("/refresh", response_model=TokenResponse)

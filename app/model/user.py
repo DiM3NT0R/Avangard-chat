@@ -18,16 +18,6 @@ class User(Document):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def to_response(self) -> dict:
-        return {
-            "id": self.id,
-            "username": self.username,
-            "full_name": self.full_name,
-            "avatar_url": self.avatar_url,
-            "is_online": self.is_online,
-            "created_at": self.created_at,
-        }
-
     class Settings:
         name = "users"
         indexes = [
