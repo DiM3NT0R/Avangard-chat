@@ -60,6 +60,7 @@ class MessageService:
         room = await self.room_service.get_for_user(room_id, user_id)
         return await (
             Message.find({"room": linked_document_ref(ChatRoom.Settings.name, room.id)})
+            .sort([("created_at", 1), ("_id", 1)])
             .skip(offset)
             .limit(limit)
             .to_list()

@@ -200,6 +200,46 @@ def test_missing_room_and_message_return_404(client: TestClient):
     assert delete_response.status_code == 404
 
 
+def test_message_history_is_sorted_and_paginates_stably(client: TestClient):
+    owner = register_user(client, "history-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="history-room",
+    )
+
+    first = create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="first",
+    )
+    second = create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="second",
+    )
+
+    full_history_response = client.get(
+        f"/message/room/{room['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert full_history_response.status_code == 200
+    full_history = full_history_response.json()
+    assert [item["id"] for item in full_history] == [first["id"], second["id"]]
+
+    paged_history_response = client.get(
+        f"/message/room/{room['id']}?limit=1&offset=1",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert paged_history_response.status_code == 200
+    paged_history = paged_history_response.json()
+    assert len(paged_history) == 1
+    assert paged_history[0]["id"] == second["id"]
+
+
 def test_users_can_only_list_their_own_rooms(client: TestClient):
     alice = register_user(client, "alice-rooms")
     bob = register_user(client, "bob-rooms")
