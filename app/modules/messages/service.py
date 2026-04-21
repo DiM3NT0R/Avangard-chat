@@ -160,7 +160,7 @@ class MessageService:
 
     @staticmethod
     def _cursor_aesgcm() -> AESGCM:
-        key = hashlib.sha256(settings.jwt.refresh_secret_key.encode()).digest()
+        key = hashlib.sha256(settings.message_cursor_secret_key.encode()).digest()
         return AESGCM(key)
 
     @classmethod
@@ -581,13 +581,21 @@ class MessageService:
             "sender": {"$ne": user_ref},
             "read_by": {"$ne": user_ref},
         }
-        unread_messages = await (
-            Message.find(unread_query)
-            .sort([("_id", 1)])
-            .limit(MAX_MARK_ROOM_READ_EVENT_IDS)
-            .to_list()
+        unread_message_refs = (
+            await Message.get_motor_collection()
+            .find(
+                unread_query,
+                projection={"_id": 1},
+                sort=[("_id", 1)],
+                limit=MAX_MARK_ROOM_READ_EVENT_IDS,
+            )
+            .to_list(length=MAX_MARK_ROOM_READ_EVENT_IDS)
         )
-        unread_ids = [str(message.id) for message in unread_messages]
+        unread_ids = [
+            str(message_ref["_id"])
+            for message_ref in unread_message_refs
+            if message_ref.get("_id") is not None
+        ]
         result = await Message.get_motor_collection().update_many(
             unread_query,
             {"$addToSet": {"read_by": user_ref}},

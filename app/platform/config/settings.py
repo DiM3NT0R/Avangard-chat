@@ -139,6 +139,7 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str
     refresh_token_secret_key: str
+    message_cursor_secret_key: str
     jwt_algorithm: str = "HS256"
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 30
