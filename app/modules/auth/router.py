@@ -58,7 +58,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 @router.post(
     "/register",
     response_model=AuthResponse,
-    responses=error_responses(401, 422),
+    responses=error_responses(401, 409, 422, 429),
 )
 async def register(
     data: RegisterRequest,
@@ -88,7 +88,7 @@ async def register(
 @router.post(
     "/login",
     response_model=AuthResponse,
-    responses=error_responses(401, 422),
+    responses=error_responses(401, 422, 429),
 )
 async def login(
     data: LoginRequest,
@@ -118,7 +118,7 @@ async def login(
 @router.post(
     "/refresh",
     response_model=TokenResponse,
-    responses=error_responses(401),
+    responses=error_responses(401, 429),
 )
 async def refresh(
     request: Request,

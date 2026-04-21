@@ -59,6 +59,36 @@ def test_openapi_rooms_and_messages_include_explicit_error_models(
     )
 
 
+def test_openapi_auth_includes_conflict_and_rate_limit_error_models(
+    client: TestClient,
+):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+
+    error_ref = "#/components/schemas/ErrorResponse"
+    register_responses = schema["paths"]["/auth/register"]["post"]["responses"]
+    login_responses = schema["paths"]["/auth/login"]["post"]["responses"]
+    refresh_responses = schema["paths"]["/auth/refresh"]["post"]["responses"]
+
+    assert (
+        register_responses["409"]["content"]["application/json"]["schema"]["$ref"]
+        == error_ref
+    )
+    assert (
+        register_responses["429"]["content"]["application/json"]["schema"]["$ref"]
+        == error_ref
+    )
+    assert (
+        login_responses["429"]["content"]["application/json"]["schema"]["$ref"]
+        == error_ref
+    )
+    assert (
+        refresh_responses["429"]["content"]["application/json"]["schema"]["$ref"]
+        == error_ref
+    )
+
+
 def test_health_ready_returns_ok_when_dependencies_are_healthy(
     client: TestClient,
     monkeypatch,

@@ -36,6 +36,14 @@ _ERROR_RESPONSES: dict[int, dict[str, Any]] = {
         "model": ErrorResponse,
         "description": "Not Found",
     },
+    409: {
+        "model": ErrorResponse,
+        "description": "Conflict",
+    },
+    429: {
+        "model": ErrorResponse,
+        "description": "Too Many Requests",
+    },
     422: {
         "model": ValidationErrorResponse,
         "description": "Validation Error",
