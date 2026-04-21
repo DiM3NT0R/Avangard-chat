@@ -10,7 +10,7 @@ from app.model.user import User
 class ChatRoom(Document):
     name: Optional[str] = None
     is_group: bool = False
-    members: List[Link[User]] = []
+    members: List[Link[User]] = Field(default_factory=list)
     created_by: Link[User]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
