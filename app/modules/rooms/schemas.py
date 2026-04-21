@@ -37,6 +37,7 @@ class UserRoomsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     groups: List[ChatRoomResponse]
     dms: List[ChatRoomResponse]
+    next_cursor: str | None = None
 
 
 def serialize_chat_room_response(room: ChatRoom) -> ChatRoomResponse:

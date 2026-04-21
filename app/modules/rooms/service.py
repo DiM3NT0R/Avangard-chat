@@ -1,4 +1,10 @@
+import base64
+import json
+from datetime import datetime
+
 from beanie.odm.operators.find.comparison import In
+from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
 
@@ -37,6 +43,26 @@ class RoomService:
     def _build_dm_key(user_a_id: str, user_b_id: str) -> str:
         first, second = sorted((user_a_id, user_b_id))
         return f"{first}:{second}"
+
+    @staticmethod
+    def _encode_room_cursor(room: ChatRoom) -> str:
+        payload = {
+            "created_at": room.created_at.isoformat(),
+            "room_id": str(room.id),
+        }
+        raw = json.dumps(payload, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).decode()
+
+    @staticmethod
+    def _decode_room_cursor(cursor: str) -> tuple[datetime, ObjectId]:
+        try:
+            decoded = base64.urlsafe_b64decode(cursor.encode()).decode()
+            payload = json.loads(decoded)
+            created_at = datetime.fromisoformat(payload["created_at"])
+            room_id = ObjectId(payload["room_id"])
+            return created_at, room_id
+        except (ValueError, KeyError, TypeError, InvalidId, json.JSONDecodeError):
+            raise HTTPException(status_code=400, detail="Invalid cursor")
 
     async def _get_user_or_401(self, user_id: str) -> User:
         user = await User.find_one(User.id == user_id)
@@ -149,7 +175,13 @@ class RoomService:
         await self._ensure_room_access(room, user_id)
         return room
 
-    async def list_all_by_user(self, user_id: str) -> list[ChatRoom]:
+    async def list_all_by_user(
+        self,
+        user_id: str,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> tuple[list[ChatRoom], str | None]:
         user_ref = linked_document_ref(User.Settings.name, user_id)
         query = {
             "$or": [
@@ -157,15 +189,61 @@ class RoomService:
                 {"created_by": user_ref},
             ]
         }
-        return await ChatRoom.find(query).sort("-created_at").to_list()
+        if cursor:
+            created_at, room_id = self._decode_room_cursor(cursor)
+            query["$and"] = [
+                {
+                    "$or": [
+                        {"created_at": {"$lt": created_at}},
+                        {"created_at": created_at, "_id": {"$lt": room_id}},
+                    ]
+                }
+            ]
+
+        rooms = await (
+            ChatRoom.find(query)
+            .sort([("created_at", -1), ("_id", -1)])
+            .limit(limit + 1)
+            .to_list()
+        )
+        has_more = len(rooms) > limit
+        page_items = rooms[:limit]
+        next_cursor = (
+            self._encode_room_cursor(page_items[-1])
+            if has_more and page_items
+            else None
+        )
+        return page_items, next_cursor
+
+    async def list_all_by_user_unbounded(self, user_id: str) -> list[ChatRoom]:
+        all_rooms: list[ChatRoom] = []
+        cursor: str | None = None
+        while True:
+            page_rooms, cursor = await self.list_all_by_user(
+                user_id,
+                limit=200,
+                cursor=cursor,
+            )
+            all_rooms.extend(page_rooms)
+            if not cursor:
+                break
+        return all_rooms
 
     async def list_by_user_partitioned(
-        self, user_id: str
-    ) -> tuple[list[ChatRoom], list[ChatRoom]]:
-        rooms = await self.list_all_by_user(user_id)
+        self,
+        user_id: str,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> tuple[list[ChatRoom], list[ChatRoom], str | None]:
+        rooms, next_cursor = await self.list_all_by_user(
+            user_id,
+            limit=limit,
+            cursor=cursor,
+        )
         groups = [room for room in rooms if room.is_group]
         dms = [room for room in rooms if not room.is_group]
-        return groups, dms
+        return groups, dms, next_cursor
 
     async def delete_room(self, room_id: str, user_id: str) -> None:
         room = await self.get(room_id)

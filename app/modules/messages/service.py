@@ -453,7 +453,7 @@ class MessageService:
         if room_id:
             rooms = [await self.room_service.get_for_user(room_id, user_id)]
         else:
-            rooms = await self.room_service.list_all_by_user(user_id)
+            rooms = await self.room_service.list_all_by_user_unbounded(user_id)
 
         if not rooms:
             return UnreadCountsResponse(total=0, by_room=[])
@@ -489,7 +489,7 @@ class MessageService:
             room = await self.room_service.get_for_user(room_id, user_id)
             room_ids = [str(room.id)]
         else:
-            rooms = await self.room_service.list_all_by_user(user_id)
+            rooms = await self.room_service.list_all_by_user_unbounded(user_id)
             room_ids = [str(room.id) for room in rooms]
 
         page = self._decode_search_cursor(cursor) if cursor else 1

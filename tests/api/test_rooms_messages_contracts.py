@@ -73,7 +73,7 @@ def test_rooms_and_messages_contract_shapes(client: TestClient):
     )
     assert list_rooms_response.status_code == 200
     list_payload = list_rooms_response.json()
-    _assert_exact_keys(list_payload, {"groups", "dms"})
+    _assert_exact_keys(list_payload, {"groups", "dms", "next_cursor"})
     assert all(
         set(room.keys())
         == {"id", "name", "is_group", "member_ids", "created_by_id", "created_at"}
