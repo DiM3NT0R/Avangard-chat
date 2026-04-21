@@ -149,6 +149,8 @@ class Settings(BaseSettings):
 
     auth_rate_limit_window_seconds: int = 60
     auth_rate_limit_max_attempts: int = 10
+    message_search_rate_limit_window_seconds: int = 60
+    message_search_rate_limit_max_attempts: int = 30
 
     abuse_window_seconds: int = 300
     abuse_auth_ip_max_attempts: int = 200

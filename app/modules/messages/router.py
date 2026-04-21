@@ -9,7 +9,12 @@ from app.modules.messages.schemas import (
     UnreadCountsResponse,
 )
 from app.modules.messages.service import MessageService
-from app.modules.system.dependencies import get_message_service, verify_token
+from app.modules.system.dependencies import (
+    get_message_service,
+    get_rate_limit_service,
+    verify_token,
+)
+from app.platform.backends.dragonfly.rate_limit import RateLimitService
 from app.platform.http.errors import error_responses
 from app.platform.http.schemas import OperationOkResponse
 
@@ -52,7 +57,7 @@ async def get_history(
 @router.get(
     "/search",
     response_model=MessageCursorPageResponse,
-    responses=error_responses(400, 401, 403, 404, 422),
+    responses=error_responses(400, 401, 403, 404, 422, 429),
 )
 async def search_messages(
     q: str = Query(..., min_length=1, max_length=5000),
@@ -61,7 +66,9 @@ async def search_messages(
     cursor: str | None = Query(default=None),
     user: dict = Depends(verify_token),
     message_service: MessageService = Depends(get_message_service),
+    rate_limit_service: RateLimitService = Depends(get_rate_limit_service),
 ):
+    await rate_limit_service.enforce_message_search(user_id=user["sub"])
     return await message_service.search(
         query=q,
         user_id=user["sub"],

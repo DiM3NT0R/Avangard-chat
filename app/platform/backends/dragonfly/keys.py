@@ -21,6 +21,10 @@ def rl_ws_typing(prefix: str, user_id: str, room_id: str) -> str:
     return f"{prefix}:rl:ws:typing:{user_id}:{room_id}"
 
 
+def rl_message_search(prefix: str, user_id: str) -> str:
+    return f"{prefix}:rl:message:search:{user_id}"
+
+
 def abuse_auth_ip(prefix: str, ip: str) -> str:
     return f"{prefix}:abuse:auth:ip:{ip}"
 

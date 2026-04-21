@@ -150,6 +150,15 @@ class DragonflyService:
             failure_policy=self._settings.dragonfly.fail_policy.rate_limit,
         )
 
+    async def enforce_message_search_rate_limit(self, *, user_id: str) -> None:
+        await self.enforce_rate_limit(
+            key=keys.rl_message_search(self._prefix, user_id),
+            limit=self._settings.message_search_rate_limit_max_attempts,
+            window_seconds=self._settings.message_search_rate_limit_window_seconds,
+            detail="Too many search requests. Slow down.",
+            failure_policy=self._settings.dragonfly.fail_policy.rate_limit,
+        )
+
     async def publish_room_event(self, room_id: str, payload: dict[str, Any]) -> None:
         channel = keys.ws_room_channel(self._prefix, room_id)
         try:
