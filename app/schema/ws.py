@@ -19,6 +19,24 @@ class WsMessageCreatedEvent(BaseModel):
     payload: MessageResponse
 
 
+class WsPingPayload(BaseModel):
+    ts: int
+
+
+class WsPingEvent(BaseModel):
+    type: Literal["chat.ping"] = "chat.ping"
+    payload: WsPingPayload
+
+
+class WsPongPayload(BaseModel):
+    ts: int
+
+
+class WsPongEvent(BaseModel):
+    type: Literal["chat.pong"]
+    payload: WsPongPayload
+
+
 class WsErrorPayload(BaseModel):
     code: str
     detail: str

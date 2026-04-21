@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     auth_rate_limit_max_attempts: int = 10
     ws_connect_rate_limit_window_seconds: int = 60
     ws_connect_rate_limit_max_attempts: int = 20
+    ws_heartbeat_interval_seconds: int = 30
+    ws_idle_timeout_seconds: int = 90
     ws_rate_limit_window_seconds: int = 5
     ws_rate_limit_max_messages: int = 20
 

@@ -1,3 +1,6 @@
+import asyncio
+from time import monotonic, time
+
 from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
@@ -11,6 +14,9 @@ from app.schema.ws import (
     WsErrorPayload,
     WsMessageCreatedEvent,
     WsMessageCreateEvent,
+    WsPingEvent,
+    WsPingPayload,
+    WsPongEvent,
 )
 from app.service.message_service import MessageService
 from app.service.room_service import RoomService
@@ -47,6 +53,18 @@ async def _send_error(websocket: WebSocket, code: str, detail: str) -> None:
     )
 
 
+async def _send_ping(websocket: WebSocket) -> None:
+    await websocket.send_json(
+        jsonable_encoder(
+            WsPingEvent(
+                payload=WsPingPayload(
+                    ts=int(time()),
+                )
+            )
+        )
+    )
+
+
 async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
     subprotocols = list(websocket.scope.get("subprotocols", []))
 
@@ -68,9 +86,61 @@ async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
         return
 
     await manager.connect(websocket, room_id, subprotocol=CHAT_SUBPROTOCOL)
+    last_activity_at = monotonic()
     try:
         while True:
-            data = await websocket.receive_json()
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_json(),
+                    timeout=settings.ws_heartbeat_interval_seconds,
+                )
+            except TimeoutError:
+                idle_for = monotonic() - last_activity_at
+                if idle_for >= settings.ws_idle_timeout_seconds:
+                    await websocket.close(code=1001)
+                    break
+                await _send_ping(websocket)
+                continue
+
+            last_activity_at = monotonic()
+
+            try:
+                event_type = data.get("type")
+            except AttributeError:
+                event_type = None
+
+            if event_type == "chat.pong":
+                try:
+                    WsPongEvent.model_validate(data)
+                except ValidationError:
+                    await _send_error(
+                        websocket,
+                        code="invalid_event",
+                        detail="Expected event: chat.message.create or chat.pong",
+                    )
+                continue
+
+            if event_type != "chat.message.create":
+                await _send_error(
+                    websocket,
+                    code="invalid_event",
+                    detail="Expected event: chat.message.create or chat.pong",
+                )
+                continue
+
+            try:
+                event = WsMessageCreateEvent.model_validate(data)
+                message_input = MessageCreate(
+                    room_id=room_id,
+                    text=event.payload.text,
+                )
+            except ValidationError:
+                await _send_error(
+                    websocket,
+                    code="invalid_event",
+                    detail="Expected event: chat.message.create or chat.pong",
+                )
+                continue
 
             try:
                 ws_message_rate_limiter.check(
@@ -87,20 +157,6 @@ async def handle_room_chat(websocket: WebSocket, room_id: str) -> None:
                 )
                 await websocket.close(code=1008)
                 break
-
-            try:
-                event = WsMessageCreateEvent.model_validate(data)
-                message_input = MessageCreate(
-                    room_id=room_id,
-                    text=event.payload.text,
-                )
-            except ValidationError:
-                await _send_error(
-                    websocket,
-                    code="invalid_event",
-                    detail="Expected event: chat.message.create",
-                )
-                continue
 
             try:
                 message = await MessageService.send(

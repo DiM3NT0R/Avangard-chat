@@ -121,7 +121,7 @@ def test_websocket_legacy_payload_returns_invalid_event_error(client: TestClient
         "type": "error",
         "payload": {
             "code": "invalid_event",
-            "detail": "Expected event: chat.message.create",
+            "detail": "Expected event: chat.message.create or chat.pong",
         },
     }
 
@@ -224,3 +224,63 @@ def test_websocket_connection_rate_limit_blocks_connect_spam(
             pass
 
     assert exc_info.value.code == 1008
+
+
+def test_websocket_heartbeat_ping_and_pong(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(settings, "ws_heartbeat_interval_seconds", 1)
+    monkeypatch.setattr(settings, "ws_idle_timeout_seconds", 5)
+
+    owner = register_user(client, "ws-heartbeat-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="ws-heartbeat-room",
+    )
+
+    with client.websocket_connect(
+        _ws_url(room["id"]),
+        subprotocols=_ws_subprotocols(owner["access_token"]),
+    ) as ws:
+        ping_event = ws.receive_json()
+        assert ping_event["type"] == "chat.ping"
+
+        ws.send_json(
+            {
+                "type": "chat.pong",
+                "payload": {"ts": ping_event["payload"]["ts"]},
+            }
+        )
+        ws.send_json(_ws_create_message_event("after pong"))
+        created_event = ws.receive_json()
+        assert created_event["type"] == "chat.message.created"
+
+
+def test_websocket_idle_timeout_closes_stale_connection(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(settings, "ws_heartbeat_interval_seconds", 1)
+    monkeypatch.setattr(settings, "ws_idle_timeout_seconds", 2)
+
+    owner = register_user(client, "ws-idle-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="ws-idle-room",
+    )
+
+    with client.websocket_connect(
+        _ws_url(room["id"]),
+        subprotocols=_ws_subprotocols(owner["access_token"]),
+    ) as ws:
+        ping_event = ws.receive_json()
+        assert ping_event["type"] == "chat.ping"
+
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert exc_info.value.code == 1001
