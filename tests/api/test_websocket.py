@@ -71,8 +71,8 @@ def test_websocket_messages_are_broadcast_and_persisted(client: TestClient):
         headers=auth_headers(owner["access_token"]),
     )
     assert history_response.status_code == 200
-    assert len(history_response.json()) == 1
-    assert history_response.json()[0]["text"] == "hello over websocket"
+    assert len(history_response.json()["items"]) == 1
+    assert history_response.json()["items"][0]["text"] == "hello over websocket"
 
 
 def test_websocket_rejects_non_members(client: TestClient):
@@ -460,7 +460,7 @@ def test_websocket_idempotency_prevents_duplicate_messages(client: TestClient):
         headers=auth_headers(owner["access_token"]),
     )
     assert history_response.status_code == 200
-    assert len(history_response.json()) == 1
+    assert len(history_response.json()["items"]) == 1
 
 
 def test_websocket_requires_auth_subprotocol(client: TestClient):

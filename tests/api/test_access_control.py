@@ -40,7 +40,7 @@ def test_room_and_message_access_is_limited_to_members(client: TestClient):
         headers=auth_headers(owner["access_token"]),
     )
     assert history_response.status_code == 200
-    assert len(history_response.json()) == 1
+    assert len(history_response.json()["items"]) == 1
 
     outsider_send_response = client.post(
         "/message",
@@ -192,19 +192,21 @@ def test_message_history_is_sorted_and_paginates_stably(client: TestClient):
     )
 
     full_history_response = client.get(
-        f"/message/room/{room['id']}",
+        f"/message/room/{room['id']}?limit=1",
         headers=auth_headers(owner["access_token"]),
     )
     assert full_history_response.status_code == 200
-    full_history = full_history_response.json()
-    assert [item["id"] for item in full_history] == [first["id"], second["id"]]
+    full_history = full_history_response.json()["items"]
+    assert [item["id"] for item in full_history] == [first["id"]]
 
+    first_page_next_cursor = full_history_response.json()["next_cursor"]
+    assert first_page_next_cursor is not None
     paged_history_response = client.get(
-        f"/message/room/{room['id']}?limit=1&offset=1",
+        f"/message/room/{room['id']}?limit=1&cursor={first_page_next_cursor}",
         headers=auth_headers(owner["access_token"]),
     )
     assert paged_history_response.status_code == 200
-    paged_history = paged_history_response.json()
+    paged_history = paged_history_response.json()["items"]
     assert len(paged_history) == 1
     assert paged_history[0]["id"] == second["id"]
 

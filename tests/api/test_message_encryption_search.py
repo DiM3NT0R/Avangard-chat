@@ -66,7 +66,7 @@ def test_message_search_respects_room_access(client):
         headers=auth_headers(owner["access_token"]),
     )
     assert owner_search.status_code == 200
-    owner_result_ids = [message["id"] for message in owner_search.json()]
+    owner_result_ids = [message["id"] for message in owner_search.json()["items"]]
     assert private_message["id"] in owner_result_ids
 
     outsider_search = client.get(
@@ -74,7 +74,7 @@ def test_message_search_respects_room_access(client):
         headers=auth_headers(outsider["access_token"]),
     )
     assert outsider_search.status_code == 200
-    outsider_result_ids = [message["id"] for message in outsider_search.json()]
+    outsider_result_ids = [message["id"] for message in outsider_search.json()["items"]]
     assert private_message["id"] not in outsider_result_ids
 
     unauthorized_scope = client.get(
@@ -104,7 +104,7 @@ def test_message_delete_removes_it_from_search(client):
         headers=auth_headers(owner["access_token"]),
     )
     assert before_delete.status_code == 200
-    assert [item["id"] for item in before_delete.json()] == [message["id"]]
+    assert [item["id"] for item in before_delete.json()["items"]] == [message["id"]]
 
     delete_response = client.delete(
         f"/message/{message['id']}",
@@ -117,7 +117,7 @@ def test_message_delete_removes_it_from_search(client):
         headers=auth_headers(owner["access_token"]),
     )
     assert after_delete.status_code == 200
-    assert after_delete.json() == []
+    assert after_delete.json() == {"items": [], "next_cursor": None}
 
 
 def test_message_search_supports_pagination(client):
@@ -143,22 +143,25 @@ def test_message_search_supports_pagination(client):
     )
 
     first_page = client.get(
-        "/message/search?q=page-key&limit=1&offset=0",
+        "/message/search?q=page-key&limit=1",
         headers=auth_headers(owner["access_token"]),
     )
     assert first_page.status_code == 200
-    assert len(first_page.json()) == 1
+    first_payload = first_page.json()
+    assert len(first_payload["items"]) == 1
+    assert first_payload["next_cursor"] is not None
 
     second_page = client.get(
-        "/message/search?q=page-key&limit=1&offset=1",
+        f"/message/search?q=page-key&limit=1&cursor={first_payload['next_cursor']}",
         headers=auth_headers(owner["access_token"]),
     )
     assert second_page.status_code == 200
-    assert len(second_page.json()) == 1
-    assert first_page.json()[0]["id"] != second_page.json()[0]["id"]
+    second_payload = second_page.json()
+    assert len(second_payload["items"]) == 1
+    assert first_payload["items"][0]["id"] != second_payload["items"][0]["id"]
     assert {first["id"], second["id"]} == {
-        first_page.json()[0]["id"],
-        second_page.json()[0]["id"],
+        first_payload["items"][0]["id"],
+        second_payload["items"][0]["id"],
     }
 
 
@@ -195,4 +198,94 @@ def test_message_search_room_scope_filters_results(client):
         headers=auth_headers(owner["access_token"]),
     )
     assert scoped.status_code == 200
-    assert [item["id"] for item in scoped.json()] == [message_a["id"]]
+    assert [item["id"] for item in scoped.json()["items"]] == [message_a["id"]]
+
+
+def test_deleted_message_is_redacted_in_history(client):
+    owner = register_user(client, "history-redact-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="history-redact-room",
+    )
+    message = create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="must be hidden after delete",
+    )
+
+    delete_response = client.delete(
+        f"/message/{message['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert delete_response.status_code == 200
+
+    history_response = client.get(
+        f"/message/room/{room['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert history_response.status_code == 200
+    item = history_response.json()["items"][0]
+    assert item["is_deleted"] is True
+    assert item["text"] == "[deleted]"
+
+
+def test_message_cursor_rejects_invalid_values(client):
+    owner = register_user(client, "invalid-cursor-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="invalid-cursor-room",
+    )
+    create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="cursor sample",
+    )
+
+    invalid_history_cursor = client.get(
+        f"/message/room/{room['id']}?cursor=invalid",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert invalid_history_cursor.status_code == 400
+
+    invalid_search_cursor = client.get(
+        "/message/search?q=cursor&cursor=invalid",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert invalid_search_cursor.status_code == 400
+
+
+def test_room_delete_cascades_messages_and_search_docs(client):
+    owner = register_user(client, "cascade-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="cascade-room",
+    )
+    message = create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="cascade keyword",
+    )
+
+    delete_room_response = client.delete(
+        f"/room/{room['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert delete_room_response.status_code == 200
+
+    message_doc = asyncio.run(Message.get(message["id"]))
+    assert message_doc is None
+
+    room_search = client.get(
+        f"/message/search?q=cascade&room_id={room['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert room_search.status_code == 404

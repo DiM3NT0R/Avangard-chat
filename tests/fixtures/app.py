@@ -69,6 +69,29 @@ class FakeTypesenseService:
         visible.sort(key=lambda doc: doc["created_at"], reverse=True)
         return [doc["id"] for doc in visible[offset : offset + limit]]
 
+    async def search_message_ids_by_page(
+        self,
+        *,
+        query: str,
+        room_ids: list[str],
+        limit: int,
+        page: int,
+    ) -> tuple[list[str], bool]:
+        query_lower = query.lower()
+        visible = [
+            doc
+            for doc in self._docs.values()
+            if doc["room_id"] in room_ids
+            and not doc["is_deleted"]
+            and query_lower in doc["text"].lower()
+        ]
+        visible.sort(key=lambda doc: doc["created_at"], reverse=True)
+        start = (page - 1) * limit
+        end = start + limit
+        ids = [doc["id"] for doc in visible[start:end]]
+        has_more = end < len(visible)
+        return ids, has_more
+
 
 async def _clear_dragonfly_keys() -> None:
     adapter = get_dragonfly_adapter_singleton()
