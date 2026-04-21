@@ -7,6 +7,7 @@ from app.schema.message import MessageResponse
 
 class WsMessageCreatePayload(BaseModel):
     text: str = Field(min_length=1, max_length=5000)
+    idempotency_key: str = Field(min_length=8, max_length=128)
 
 
 class WsMessageCreateEvent(BaseModel):

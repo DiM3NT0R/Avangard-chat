@@ -4,13 +4,22 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.database import init_db
-from app.router import auth, messages, rooms, users, ws
+from app.dragonfly.container import get_dragonfly_service_singleton
+from app.router import auth, health, messages, rooms, users, ws
+from app.ws.manager import manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
-    yield
+    dragonfly = get_dragonfly_service_singleton()
+    await dragonfly.startup()
+    try:
+        await init_db()
+        await manager.startup()
+        yield
+    finally:
+        await manager.shutdown()
+        await dragonfly.shutdown()
 
 
 app = FastAPI(
@@ -19,6 +28,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(users.router, prefix="/user", tags=["Users"])
 app.include_router(rooms.router, prefix="/room", tags=["Rooms"])
 app.include_router(messages.router, prefix="/message", tags=["Messages"])

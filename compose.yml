@@ -8,10 +8,13 @@ services:
     environment:
       - MONGODB_URL=mongodb://mongo:27017
       - DB_NAME=chat_db
+      - DRAGONFLY_URL=redis://dragonfly:6379/0
       - JWT_SECRET_KEY=change-me-access-secret
       - REFRESH_TOKEN_SECRET_KEY=change-me-refresh-secret
     depends_on:
       mongodb:
+        condition: service_healthy
+      dragonfly:
         condition: service_healthy
     healthcheck:
       test:
@@ -19,7 +22,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json')",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready')",
         ]
       interval: 10s
       timeout: 5s
@@ -48,6 +51,19 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  dragonfly:
+    container_name: dragonfly
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.27.1
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
     restart: unless-stopped
 
 volumes:

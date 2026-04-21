@@ -6,8 +6,9 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 
 from app.config import settings
-from app.dependencies import verify_token
-from app.rate_limit import ws_connection_rate_limiter, ws_message_rate_limiter
+from app.dependencies import validate_access_token
+from app.dragonfly.service import DragonflyService
+from app.rate_limit import RateLimitService
 from app.schema.message import MessageCreate, serialize_message_response
 from app.schema.ws import (
     WsErrorEvent,
@@ -65,32 +66,47 @@ async def _send_ping(websocket: WebSocket) -> None:
     )
 
 
+async def _send_message_created(websocket: WebSocket, payload: dict) -> None:
+    await websocket.send_json(
+        jsonable_encoder(
+            WsMessageCreatedEvent(payload=payload),
+        )
+    )
+
+
 async def handle_room_chat(
     websocket: WebSocket,
     room_id: str,
     room_service: RoomService,
     message_service: MessageService,
+    rate_limit_service: RateLimitService,
+    dragonfly: DragonflyService,
 ) -> None:
     subprotocols = list(websocket.scope.get("subprotocols", []))
+    client_ip = websocket.client.host if websocket.client else "unknown"
 
     try:
+        await rate_limit_service.enforce_ws_handshake(ip=client_ip)
         _require_chat_subprotocol(subprotocols)
         token = _extract_bearer_token(subprotocols)
-        payload = await verify_token(token)
+        payload = await validate_access_token(token=token, dragonfly=dragonfly)
         await room_service.get_for_user(room_id, payload["sub"])
-
-        ws_connection_rate_limiter.check(
-            bucket_key=f"ws-connect:{payload['sub']}",
-            limit=settings.ws_connect_rate_limit_max_attempts,
-            window_seconds=settings.ws_connect_rate_limit_window_seconds,
-            detail="Too many websocket connection attempts. Try again later.",
+        await rate_limit_service.enforce_ws_connect(
+            user_id=payload["sub"],
+            room_id=room_id,
+            ip=client_ip,
         )
     except HTTPException as exc:
         code = 1002 if exc.status_code == 400 else 1008
         await websocket.close(code=code)
         return
 
-    await manager.connect(websocket, room_id, subprotocol=CHAT_SUBPROTOCOL)
+    await manager.connect(
+        websocket,
+        room_id,
+        payload["sub"],
+        subprotocol=CHAT_SUBPROTOCOL,
+    )
     last_activity_at = monotonic()
     try:
         while True:
@@ -123,6 +139,8 @@ async def handle_room_chat(
                         code="invalid_event",
                         detail="Expected event: chat.message.create or chat.pong",
                     )
+                    continue
+                await manager.touch(websocket)
                 continue
 
             if event_type != "chat.message.create":
@@ -148,11 +166,9 @@ async def handle_room_chat(
                 continue
 
             try:
-                ws_message_rate_limiter.check(
-                    bucket_key=f"ws-message:{room_id}:{payload['sub']}",
-                    limit=settings.ws_rate_limit_max_messages,
-                    window_seconds=settings.ws_rate_limit_window_seconds,
-                    detail="Too many websocket messages. Slow down.",
+                await rate_limit_service.enforce_ws_message(
+                    user_id=payload["sub"],
+                    room_id=room_id,
                 )
             except HTTPException as exc:
                 await _send_error(
@@ -163,10 +179,52 @@ async def handle_room_chat(
                 await websocket.close(code=1008)
                 break
 
+            await manager.touch(websocket)
+            lock_token = await dragonfly.acquire_ws_idempotency_lock(
+                room_id=room_id,
+                user_id=payload["sub"],
+                idempotency_key=event.payload.idempotency_key,
+            )
+            if not lock_token:
+                await _send_error(
+                    websocket,
+                    code="idempotency_in_progress",
+                    detail=(
+                        "A request with this idempotency key is already in progress."
+                    ),
+                )
+                continue
+
             try:
+                existing_message_id = await dragonfly.get_ws_idempotency_message_id(
+                    room_id=room_id,
+                    user_id=payload["sub"],
+                    idempotency_key=event.payload.idempotency_key,
+                )
+                if existing_message_id:
+                    existing_message = await message_service.get_by_id(
+                        existing_message_id
+                    )
+                    await _send_message_created(
+                        websocket,
+                        serialize_message_response(existing_message).model_dump(),
+                    )
+                    continue
+
                 message = await message_service.send(
                     data=message_input,
                     sender_id=payload["sub"],
+                )
+                message_payload = serialize_message_response(message)
+                await dragonfly.set_ws_idempotency_message_id(
+                    room_id=room_id,
+                    user_id=payload["sub"],
+                    idempotency_key=event.payload.idempotency_key,
+                    message_id=str(message.id),
+                )
+                await manager.publish(
+                    room_id,
+                    jsonable_encoder(WsMessageCreatedEvent(payload=message_payload)),
                 )
             except HTTPException as exc:
                 error_code = "message_create_failed"
@@ -183,14 +241,14 @@ async def handle_room_chat(
                 if exc.status_code in {401, 403}:
                     await websocket.close(code=1008)
                     break
-                continue
-
-            message_payload = serialize_message_response(message)
-            await manager.broadcast(
-                room_id,
-                jsonable_encoder(WsMessageCreatedEvent(payload=message_payload)),
-            )
+            finally:
+                await dragonfly.release_ws_idempotency_lock(
+                    room_id=room_id,
+                    user_id=payload["sub"],
+                    idempotency_key=event.payload.idempotency_key,
+                    token=lock_token,
+                )
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(websocket, room_id)
+        await manager.disconnect(websocket, room_id)
