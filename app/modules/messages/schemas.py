@@ -28,6 +28,21 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
 
+class MarkRoomReadResponse(BaseModel):
+    ok: bool = True
+    marked_count: int
+
+
+class RoomUnreadCount(BaseModel):
+    room_id: str
+    unread_count: int
+
+
+class UnreadCountsResponse(BaseModel):
+    total: int
+    by_room: List[RoomUnreadCount]
+
+
 def serialize_message_response(message: Message, *, text: str) -> MessageResponse:
     return MessageResponse.model_validate(
         {

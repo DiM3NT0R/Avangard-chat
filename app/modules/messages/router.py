@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.modules.messages.schemas import (
+    MarkRoomReadResponse,
     MessageCreate,
     MessageResponse,
     MessageUpdate,
+    UnreadCountsResponse,
 )
 from app.modules.messages.service import MessageService
 from app.modules.system.dependencies import get_message_service, verify_token
@@ -64,6 +66,51 @@ async def search_messages(
         room_id=room_id,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/{message_id}/read",
+    response_model=MessageResponse,
+    responses=error_responses(401, 403, 404),
+)
+async def mark_message_read(
+    message_id: str,
+    user: dict = Depends(verify_token),
+    message_service: MessageService = Depends(get_message_service),
+):
+    return await message_service.mark_read(
+        message_id=message_id,
+        user_id=user["sub"],
+    )
+
+
+@router.post(
+    "/room/{room_id}/read",
+    response_model=MarkRoomReadResponse,
+    responses=error_responses(401, 403, 404),
+)
+async def mark_room_read(
+    room_id: str,
+    user: dict = Depends(verify_token),
+    message_service: MessageService = Depends(get_message_service),
+):
+    return await message_service.mark_room_read(room_id=room_id, user_id=user["sub"])
+
+
+@router.get(
+    "/unread",
+    response_model=UnreadCountsResponse,
+    responses=error_responses(401, 403, 404),
+)
+async def get_unread_counts(
+    room_id: str | None = Query(default=None),
+    user: dict = Depends(verify_token),
+    message_service: MessageService = Depends(get_message_service),
+):
+    return await message_service.get_unread_counts(
+        user_id=user["sub"],
+        room_id=room_id,
     )
 
 

@@ -4,9 +4,12 @@ from fastapi import HTTPException
 
 from app.modules.messages.model import Message
 from app.modules.messages.schemas import (
+    MarkRoomReadResponse,
     MessageCreate,
     MessageResponse,
     MessageUpdate,
+    RoomUnreadCount,
+    UnreadCountsResponse,
     serialize_message_response,
 )
 from app.modules.rooms.model import ChatRoom
@@ -45,6 +48,12 @@ class MessageService:
         if not sender:
             raise HTTPException(status_code=404, detail="Sender not found")
         return sender
+
+    async def _get_user_or_404(self, user_id: str) -> User:
+        user = await User.find_one(User.id == user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
 
     async def _get_message_or_404(self, message_id: str) -> Message:
         message = await Message.get(message_id)
@@ -103,6 +112,10 @@ class MessageService:
         decrypted_text = text if text is not None else self._decrypt_text(message)
         return serialize_message_response(message, text=decrypted_text)
 
+    @staticmethod
+    def _room_ref(room: ChatRoom):
+        return linked_document_ref(ChatRoom.Settings.name, room.id)
+
     async def _index_message(self, message: Message, *, text: str) -> None:
         await self.typesense.upsert_message(
             message_id=str(message.id),
@@ -115,7 +128,7 @@ class MessageService:
 
     async def send(self, data: MessageCreate, sender_id: str) -> MessageResponse:
         room = await self.room_service.get_for_user(data.room_id, sender_id)
-        sender = await self._get_sender_or_404(sender_id)
+        sender = await self._get_user_or_404(sender_id)
         created_at = datetime.now(UTC)
         encrypted = self._encrypt_text(
             text=data.text,
@@ -130,6 +143,7 @@ class MessageService:
             text_nonce=encrypted.nonce,
             text_key_id=encrypted.key_id,
             text_aad=encrypted.aad,
+            read_by=[sender],
             created_at=created_at,
         )
         await message.insert()
@@ -151,7 +165,7 @@ class MessageService:
     ) -> list[MessageResponse]:
         room = await self.room_service.get_for_user(room_id, user_id)
         messages = await (
-            Message.find({"room": linked_document_ref(ChatRoom.Settings.name, room.id)})
+            Message.find({"room": self._room_ref(room)})
             .sort([("created_at", 1), ("_id", 1)])
             .skip(offset)
             .limit(limit)
@@ -225,6 +239,84 @@ class MessageService:
     async def get_by_id(self, message_id: str) -> MessageResponse:
         message = await self._get_message_or_404(message_id)
         return self._serialize_message(message)
+
+    async def mark_read(self, message_id: str, user_id: str) -> MessageResponse:
+        message = await self._get_message_or_404(message_id)
+        room_id = linked_document_id(message.room)
+        await self.room_service.get_for_user(room_id, user_id)
+        user = await self._get_user_or_404(user_id)
+
+        if any(linked_document_id(reader) == user_id for reader in message.read_by):
+            return self._serialize_message(message)
+
+        message.read_by.append(user)
+        await message.save()
+        return self._serialize_message(message)
+
+    async def mark_room_read(self, room_id: str, user_id: str) -> MarkRoomReadResponse:
+        room = await self.room_service.get_for_user(room_id, user_id)
+        user = await self._get_user_or_404(user_id)
+        user_ref = linked_document_ref(User.Settings.name, user.id)
+
+        messages = await Message.find(
+            {
+                "room": self._room_ref(room),
+                "is_deleted": False,
+                "read_by": {"$ne": user_ref},
+            }
+        ).to_list()
+        marked_count = 0
+        for message in messages:
+            if any(linked_document_id(reader) == user_id for reader in message.read_by):
+                continue
+            message.read_by.append(user)
+            await message.save()
+            marked_count += 1
+
+        return MarkRoomReadResponse(marked_count=marked_count)
+
+    async def get_unread_counts(
+        self,
+        *,
+        user_id: str,
+        room_id: str | None,
+    ) -> UnreadCountsResponse:
+        user = await self._get_user_or_404(user_id)
+        user_ref = linked_document_ref(User.Settings.name, user.id)
+
+        rooms: list[ChatRoom]
+        if room_id:
+            rooms = [await self.room_service.get_for_user(room_id, user_id)]
+        else:
+            rooms = await self.room_service.list_all_by_user(user_id)
+
+        if not rooms:
+            return UnreadCountsResponse(total=0, by_room=[])
+
+        room_refs = [self._room_ref(room) for room in rooms]
+        room_id_map = {str(room.id): 0 for room in rooms}
+
+        unread_messages = await Message.find(
+            {
+                "room": {"$in": room_refs},
+                "is_deleted": False,
+                "sender": {"$ne": user_ref},
+                "read_by": {"$ne": user_ref},
+            }
+        ).to_list()
+
+        for message in unread_messages:
+            room_id_map[linked_document_id(message.room)] += 1
+
+        by_room = [
+            RoomUnreadCount(room_id=current_room_id, unread_count=unread_count)
+            for current_room_id, unread_count in room_id_map.items()
+            if unread_count > 0 or room_id is not None
+        ]
+        return UnreadCountsResponse(
+            total=sum(item.unread_count for item in by_room),
+            by_room=by_room,
+        )
 
     async def search(
         self,
