@@ -7,11 +7,16 @@ from app.modules.messages.schemas import (
 )
 from app.modules.messages.service import MessageService
 from app.modules.system.dependencies import get_message_service, verify_token
+from app.platform.http.errors import error_responses
 
 router = APIRouter()
 
 
-@router.post("", response_model=MessageResponse)
+@router.post(
+    "",
+    response_model=MessageResponse,
+    responses=error_responses(401, 403, 404, 422),
+)
 async def send_message(
     data: MessageCreate,
     user: dict = Depends(verify_token),
@@ -20,7 +25,11 @@ async def send_message(
     return await message_service.send(data=data, sender_id=user["sub"])
 
 
-@router.get("/room/{room_id}", response_model=list[MessageResponse])
+@router.get(
+    "/room/{room_id}",
+    response_model=list[MessageResponse],
+    responses=error_responses(401, 403, 404, 422),
+)
 async def get_history(
     room_id: str,
     limit: int = Query(50, ge=1, le=100),
@@ -36,7 +45,11 @@ async def get_history(
     )
 
 
-@router.get("/search", response_model=list[MessageResponse])
+@router.get(
+    "/search",
+    response_model=list[MessageResponse],
+    responses=error_responses(401, 403, 404, 422),
+)
 async def search_messages(
     q: str = Query(..., min_length=1, max_length=5000),
     room_id: str | None = Query(default=None),
@@ -54,7 +67,11 @@ async def search_messages(
     )
 
 
-@router.patch("/{message_id}", response_model=MessageResponse)
+@router.patch(
+    "/{message_id}",
+    response_model=MessageResponse,
+    responses=error_responses(401, 403, 404, 422),
+)
 async def edit_message(
     message_id: str,
     data: MessageUpdate,
@@ -68,7 +85,7 @@ async def edit_message(
     )
 
 
-@router.delete("/{message_id}")
+@router.delete("/{message_id}", responses=error_responses(401, 403, 404))
 async def delete_message(
     message_id: str,
     user: dict = Depends(verify_token),

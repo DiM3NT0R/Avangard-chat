@@ -32,6 +32,33 @@ def test_openapi_includes_bearer_security_scheme(client: TestClient):
     assert schema["security"] == [{"BearerAuth": []}]
 
 
+def test_openapi_rooms_and_messages_include_explicit_error_models(
+    client: TestClient,
+):
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    schema = response.json()
+
+    error_ref = "#/components/schemas/ErrorResponse"
+    validation_ref = "#/components/schemas/ValidationErrorResponse"
+    room_dm = schema["paths"]["/room/dm"]["post"]["responses"]
+    room_get = schema["paths"]["/room/{room_id}"]["get"]["responses"]
+    message_send = schema["paths"]["/message"]["post"]["responses"]
+
+    assert room_dm["400"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+    assert room_dm["401"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+    assert (
+        room_dm["422"]["content"]["application/json"]["schema"]["$ref"]
+        == validation_ref
+    )
+    assert room_get["403"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+    assert room_get["404"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+    assert (
+        message_send["422"]["content"]["application/json"]["schema"]["$ref"]
+        == validation_ref
+    )
+
+
 def test_health_ready_returns_ok_when_dependencies_are_healthy(
     client: TestClient,
     monkeypatch,

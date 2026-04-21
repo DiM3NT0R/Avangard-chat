@@ -19,6 +19,7 @@ from app.modules.users.schemas import serialize_user_response
 from app.platform.backends.dragonfly.rate_limit import RateLimitService
 from app.platform.config.settings import settings
 from app.platform.http.client_ip import resolve_client_ip
+from app.platform.http.errors import error_responses
 
 router = APIRouter()
 
@@ -54,7 +55,11 @@ def _clear_refresh_cookie(response: Response) -> None:
     )
 
 
-@router.post("/register", response_model=AuthResponse)
+@router.post(
+    "/register",
+    response_model=AuthResponse,
+    responses=error_responses(401, 422),
+)
 async def register(
     data: RegisterRequest,
     request: Request,
@@ -80,7 +85,11 @@ async def register(
     )
 
 
-@router.post("/login", response_model=AuthResponse)
+@router.post(
+    "/login",
+    response_model=AuthResponse,
+    responses=error_responses(401, 422),
+)
 async def login(
     data: LoginRequest,
     request: Request,
@@ -106,7 +115,11 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    responses=error_responses(401),
+)
 async def refresh(
     request: Request,
     response: Response,
@@ -128,7 +141,7 @@ async def refresh(
     return TokenResponse(access_token=access_token)
 
 
-@router.post("/logout")
+@router.post("/logout", responses=error_responses(401))
 async def logout(
     request: Request,
     response: Response,
@@ -142,7 +155,7 @@ async def logout(
     return {"ok": True}
 
 
-@router.post("/logout-all")
+@router.post("/logout-all", responses=error_responses(401))
 async def logout_all(
     request: Request,
     response: Response,

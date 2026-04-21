@@ -9,11 +9,16 @@ from app.modules.rooms.schemas import (
 )
 from app.modules.rooms.service import RoomService
 from app.modules.system.dependencies import get_room_service, verify_token
+from app.platform.http.errors import error_responses
 
 router = APIRouter()
 
 
-@router.post("/group", response_model=ChatRoomResponse)
+@router.post(
+    "/group",
+    response_model=ChatRoomResponse,
+    responses=error_responses(400, 401, 422),
+)
 async def create_group_room(
     data: GroupRoomCreate,
     user: dict = Depends(verify_token),
@@ -23,7 +28,11 @@ async def create_group_room(
     return serialize_chat_room_response(result)
 
 
-@router.post("/dm", response_model=ChatRoomResponse)
+@router.post(
+    "/dm",
+    response_model=ChatRoomResponse,
+    responses=error_responses(400, 401, 422),
+)
 async def get_or_create_direct_room(
     data: DirectRoomCreate,
     user: dict = Depends(verify_token),
@@ -33,7 +42,11 @@ async def get_or_create_direct_room(
     return serialize_chat_room_response(result)
 
 
-@router.get("/{room_id}", response_model=ChatRoomResponse)
+@router.get(
+    "/{room_id}",
+    response_model=ChatRoomResponse,
+    responses=error_responses(401, 403, 404),
+)
 async def get_room(
     room_id: str,
     user: dict = Depends(verify_token),
@@ -43,7 +56,11 @@ async def get_room(
     return serialize_chat_room_response(room)
 
 
-@router.get("/user/{user_id}", response_model=UserRoomsResponse)
+@router.get(
+    "/user/{user_id}",
+    response_model=UserRoomsResponse,
+    responses=error_responses(401, 403),
+)
 async def get_rooms_by_user_id(
     user_id: str,
     user: dict = Depends(verify_token),
@@ -61,7 +78,7 @@ async def get_rooms_by_user_id(
     )
 
 
-@router.delete("/{room_id}")
+@router.delete("/{room_id}", responses=error_responses(401, 403, 404))
 async def delete_room(
     room_id: str,
     user: dict = Depends(verify_token),
