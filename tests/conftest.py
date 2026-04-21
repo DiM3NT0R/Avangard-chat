@@ -17,6 +17,7 @@ from app.model.message import Message
 from app.model.refresh_session import RefreshSession
 from app.model.user import User
 from app.rate_limit import auth_rate_limiter
+from app.ws.manager import manager
 
 
 @pytest.fixture()
@@ -31,7 +32,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         )
 
     auth_rate_limiter._buckets.clear()
+    manager.rooms.clear()
     monkeypatch.setattr("app.main.init_db", init_test_db)
 
     with TestClient(app) as test_client:
         yield test_client
+    manager.rooms.clear()
