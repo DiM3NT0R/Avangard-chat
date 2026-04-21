@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
-from app.database import init_db
+from app.core.database import init_db
 from app.dragonfly.container import get_dragonfly_service_singleton
 from app.router import auth, health, messages, rooms, users, ws
 from app.ws.manager import manager

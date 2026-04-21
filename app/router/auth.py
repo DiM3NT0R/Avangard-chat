@@ -2,14 +2,14 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Request, Response
 
-from app.config import settings
-from app.dependencies import (
+from app.core.config import settings
+from app.core.dependencies import (
     get_auth_service,
     get_rate_limit_service,
     verify_optional_token,
     verify_token,
 )
-from app.rate_limit import RateLimitService
+from app.dragonfly.rate_limit import RateLimitService
 from app.schema.auth import AuthResponse, LoginRequest, RegisterRequest, TokenResponse
 from app.schema.user import serialize_user_response
 from app.service.auth_service import AuthService
@@ -22,13 +22,13 @@ def _client_ip(request: Request) -> str:
 
 
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
-    max_age = settings.refresh_token_ttl_days * 24 * 60 * 60
+    max_age = settings.jwt.refresh_token_ttl_days * 24 * 60 * 60
     response.set_cookie(
-        key=settings.refresh_cookie_name,
+        key=settings.refresh_cookie.name,
         value=refresh_token,
         httponly=True,
-        secure=settings.refresh_cookie_secure,
-        samesite=settings.refresh_cookie_samesite,
+        secure=settings.refresh_cookie.secure,
+        samesite=settings.refresh_cookie.samesite,
         max_age=max_age,
         expires=datetime.now(UTC) + timedelta(seconds=max_age),
         path="/auth",
@@ -37,10 +37,10 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
 
 def _clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
-        key=settings.refresh_cookie_name,
+        key=settings.refresh_cookie.name,
         path="/auth",
-        secure=settings.refresh_cookie_secure,
-        samesite=settings.refresh_cookie_samesite,
+        secure=settings.refresh_cookie.secure,
+        samesite=settings.refresh_cookie.samesite,
     )
 
 
@@ -108,7 +108,7 @@ async def refresh(
         route="refresh",
         ip=client_ip,
     )
-    refresh_token = request.cookies.get(settings.refresh_cookie_name)
+    refresh_token = request.cookies.get(settings.refresh_cookie.name)
     _, access_token, new_refresh_token = await auth_service.refresh(
         refresh_token=refresh_token or "",
         user_agent=request.headers.get("user-agent"),
@@ -125,7 +125,7 @@ async def logout(
     auth_service: AuthService = Depends(get_auth_service),
     token: dict | None = Depends(verify_optional_token),
 ):
-    await auth_service.logout(request.cookies.get(settings.refresh_cookie_name))
+    await auth_service.logout(request.cookies.get(settings.refresh_cookie.name))
     if token:
         await auth_service.revoke_access_token(token)
     _clear_refresh_cookie(response)
@@ -142,6 +142,6 @@ async def logout_all(
     await auth_service.revoke_access_token(token)
     await auth_service.set_user_access_cutoff(token["sub"])
     await auth_service.revoke_all_user_sessions(token["sub"])
-    await auth_service.logout(request.cookies.get(settings.refresh_cookie_name))
+    await auth_service.logout(request.cookies.get(settings.refresh_cookie.name))
     _clear_refresh_cookie(response)
     return {"ok": True}

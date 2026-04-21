@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
+from app.core.config import settings
 
 
 def register_user(
@@ -41,7 +41,7 @@ def auth_headers(access_token: str) -> dict[str, str]:
 def refresh_with_cookie(client: TestClient, refresh_token: str):
     return client.post(
         "/auth/refresh",
-        headers={"Cookie": f"{settings.refresh_cookie_name}={refresh_token}"},
+        headers={"Cookie": f"{settings.refresh_cookie.name}={refresh_token}"},
     )
 
 
@@ -53,14 +53,14 @@ def test_register_login_refresh_and_logout_flow(client: TestClient):
     assert me_response.status_code == 200
     assert me_response.json()["username"] == "alice"
 
-    old_refresh_token = client.cookies.get(settings.refresh_cookie_name)
+    old_refresh_token = client.cookies.get(settings.refresh_cookie.name)
     assert old_refresh_token
 
     refresh_response = client.post("/auth/refresh")
     assert refresh_response.status_code == 200
     assert refresh_response.json()["token_type"] == "bearer"
 
-    rotated_refresh_token = client.cookies.get(settings.refresh_cookie_name)
+    rotated_refresh_token = client.cookies.get(settings.refresh_cookie.name)
     assert rotated_refresh_token
     assert rotated_refresh_token != old_refresh_token
 
@@ -112,11 +112,11 @@ def test_refresh_rejects_missing_or_invalid_session(client: TestClient):
 
 def test_logout_all_revokes_every_refresh_session(client: TestClient):
     register_user(client, "multi-session-user")
-    first_refresh_token = client.cookies.get(settings.refresh_cookie_name)
+    first_refresh_token = client.cookies.get(settings.refresh_cookie.name)
     assert first_refresh_token
 
     second_login_payload = login_user(client, "multi-session-user")
-    second_refresh_token = client.cookies.get(settings.refresh_cookie_name)
+    second_refresh_token = client.cookies.get(settings.refresh_cookie.name)
     assert second_login_payload["access_token"]
     assert second_refresh_token
     assert second_refresh_token != first_refresh_token

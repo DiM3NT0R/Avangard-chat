@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.config import settings
+from app.core.config import settings
 from app.dragonfly import keys
 from app.dragonfly.adapter import DragonflyAdapter
 from app.dragonfly.service import DragonflyService
@@ -13,9 +13,9 @@ from app.dragonfly.service import DragonflyService
 
 async def _make_service(prefix: str) -> tuple[DragonflyService, DragonflyAdapter]:
     adapter = DragonflyAdapter(
-        url=settings.dragonfly_url,
-        connect_timeout_seconds=settings.dragonfly_connect_timeout_seconds,
-        socket_timeout_seconds=settings.dragonfly_socket_timeout_seconds,
+        url=settings.dragonfly.url,
+        connect_timeout_seconds=settings.dragonfly.timeout.connect_seconds,
+        socket_timeout_seconds=settings.dragonfly.timeout.socket_seconds,
     )
     await adapter.startup()
     service = DragonflyService(

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from app.dependencies import get_dragonfly_service
+from app.core.dependencies import get_dragonfly_service
 from app.dragonfly.service import DragonflyService
 from app.model.user import User
 

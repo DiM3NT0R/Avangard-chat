@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
-from app.links import linked_document_id
+from app.core.links import linked_document_id
 from app.model.chat_room import ChatRoom
 
 

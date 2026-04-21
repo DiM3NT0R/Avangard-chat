@@ -1,8 +1,8 @@
 from beanie.odm.operators.find.comparison import In
 from fastapi import HTTPException
 
+from app.core.links import linked_document_id, linked_document_ref
 from app.dragonfly.service import DragonflyService
-from app.links import linked_document_id, linked_document_ref
 from app.model.chat_room import ChatRoom
 from app.model.user import User
 from app.schema.chat_room import ChatRoomCreate

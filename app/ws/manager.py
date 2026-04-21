@@ -7,9 +7,9 @@ from uuid import uuid4
 
 from fastapi import WebSocket
 
+from app.core.logger import get_logger
 from app.dragonfly.container import get_dragonfly_service_singleton
 from app.dragonfly.service import DragonflyService
-from app.logger import get_logger
 
 logger = get_logger("ws.manager")
 

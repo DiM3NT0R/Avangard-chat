@@ -5,10 +5,10 @@ from fastapi import HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 
-from app.config import settings
-from app.dependencies import validate_access_token
+from app.core.config import settings
+from app.core.dependencies import validate_access_token
+from app.dragonfly.rate_limit import RateLimitService
 from app.dragonfly.service import DragonflyService
-from app.rate_limit import RateLimitService
 from app.schema.message import MessageCreate, serialize_message_response
 from app.schema.ws import (
     WsErrorEvent,
@@ -160,11 +160,11 @@ async def handle_room_chat(
             try:
                 data = await asyncio.wait_for(
                     websocket.receive_json(),
-                    timeout=settings.ws_heartbeat_interval_seconds,
+                    timeout=settings.ws.heartbeat_interval_seconds,
                 )
             except TimeoutError:
                 idle_for = monotonic() - last_activity_at
-                if idle_for >= settings.ws_idle_timeout_seconds:
+                if idle_for >= settings.ws.idle_timeout_seconds:
                     await websocket.close(code=1001)
                     break
                 await _send_ping(websocket)

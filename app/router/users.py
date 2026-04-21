@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import verify_token
+from app.core.dependencies import verify_token
 from app.model.user import User
 from app.schema.user import UserResponse, serialize_user_response
 

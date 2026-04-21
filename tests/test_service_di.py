@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_message_service, verify_token
+from app.core.dependencies import get_message_service, verify_token
 from app.main import app
 
 

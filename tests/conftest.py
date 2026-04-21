@@ -13,7 +13,7 @@ from beanie import init_beanie
 from fastapi.testclient import TestClient
 from mongomock_motor import AsyncMongoMockClient
 
-from app.config import settings
+from app.core.config import settings
 from app.dragonfly.container import get_dragonfly_adapter_singleton
 from app.main import app
 from app.model.chat_room import ChatRoom
@@ -26,7 +26,7 @@ async def _clear_dragonfly_keys() -> None:
     adapter = get_dragonfly_adapter_singleton()
     await adapter.startup()
     try:
-        await adapter.delete_by_pattern(f"{settings.dragonfly_key_prefix}:*")
+        await adapter.delete_by_pattern(f"{settings.dragonfly.key_prefix}:*")
     finally:
         await adapter.shutdown()
 

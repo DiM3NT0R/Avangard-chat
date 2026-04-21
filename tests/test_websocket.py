@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app.config import settings
+from app.core.config import settings
 from app.ws.manager import ConnectionContext, ConnectionManager
 from tests.test_access_control import create_room
 from tests.test_auth import auth_headers, register_user

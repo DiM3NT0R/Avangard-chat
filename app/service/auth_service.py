@@ -4,11 +4,8 @@ from typing import Any, Optional
 from fastapi import HTTPException
 from pymongo.errors import DuplicateKeyError
 
-from app.config import settings
-from app.dragonfly.service import DragonflyService, now_unix
-from app.model.user import User
-from app.schema.auth import LoginRequest, RegisterRequest
-from app.security import (
+from app.core.config import settings
+from app.core.security import (
     compose_refresh_token,
     create_access_token,
     hash_password,
@@ -19,6 +16,9 @@ from app.security import (
     split_refresh_token,
     verify_password_or_dummy,
 )
+from app.dragonfly.service import DragonflyService, now_unix
+from app.model.user import User
+from app.schema.auth import LoginRequest, RegisterRequest
 
 
 class AuthService:
@@ -51,7 +51,7 @@ class AuthService:
         created_at_unix = now_unix()
         expires_at_unix = int(
             (
-                datetime.now(UTC) + timedelta(days=settings.refresh_token_ttl_days)
+                datetime.now(UTC) + timedelta(days=settings.jwt.refresh_token_ttl_days)
             ).timestamp()
         )
         ttl_seconds = self._refresh_session_ttl_seconds(

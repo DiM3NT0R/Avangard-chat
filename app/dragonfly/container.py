@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from app.config import settings
+from app.core.config import settings
 from app.dragonfly.adapter import DragonflyAdapter
 from app.dragonfly.service import DragonflyService
 
@@ -8,9 +8,9 @@ from app.dragonfly.service import DragonflyService
 @lru_cache
 def get_dragonfly_adapter_singleton() -> DragonflyAdapter:
     return DragonflyAdapter(
-        url=settings.dragonfly_url,
-        connect_timeout_seconds=settings.dragonfly_connect_timeout_seconds,
-        socket_timeout_seconds=settings.dragonfly_socket_timeout_seconds,
+        url=settings.dragonfly.url,
+        connect_timeout_seconds=settings.dragonfly.timeout.connect_seconds,
+        socket_timeout_seconds=settings.dragonfly.timeout.socket_seconds,
     )
 
 

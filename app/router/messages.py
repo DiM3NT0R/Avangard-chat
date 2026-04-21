@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 
-from app.dependencies import get_message_service, verify_token
+from app.core.dependencies import get_message_service, verify_token
 from app.schema.message import (
     MessageCreate,
     MessageResponse,
