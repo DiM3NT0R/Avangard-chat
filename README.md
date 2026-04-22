@@ -1,5 +1,9 @@
 # Avangard Chat
 
+[![CI](https://github.com/DiM3NT0R/Avangard-chat/actions/workflows/ci.yml/badge.svg)](https://github.com/DiM3NT0R/Avangard-chat/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-proprietary-red)](https://github.com/DiM3NT0R/Avangard-chat/blob/main/LICENSE)
+[![Coverage](https://codecov.io/gh/DiM3NT0R/Avangard-chat/graph/badge.svg)](https://codecov.io/gh/DiM3NT0R/Avangard-chat)
+
 Avangard Chat представляет собой кроссплатформенный веб-мессенджер, разработанный для обеспечения отказоустойчивой коммуникации в условиях ограничений внешних сервисов. Проект ориентирован на создание минималистичного и производительного интерфейса, поддерживающего групповое взаимодействие, обмен медиафайлами и специализированные функции на базе искусственного интеллекта.
 
 ## Проблематика и целевое назначение
