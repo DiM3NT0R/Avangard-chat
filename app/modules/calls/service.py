@@ -305,7 +305,7 @@ class CallService:
             raise HTTPException(status_code=409, detail="Call has already ended")
 
         room_id = linked_document_id(call.room)
-        room = await self.room_service.get(room_id)
+        room = await self.room_service.get_for_user(room_id, user_id)
         user = await self._get_user_or_404(user_id)
         now = datetime.now(UTC)
         state = self._ensure_participant_state(
@@ -343,7 +343,7 @@ class CallService:
                 "call_id": str(call.id),
                 "kind": call.kind,
                 "room_id": room_id,
-                "room_name": room.name if room else None,
+                "room_name": room.name,
                 "username": user.username,
             },
         )
@@ -402,7 +402,12 @@ class CallService:
                 ) from exc
         state.left_at = left_at
         await call.save()
-        reason = "left" if joined or user_id == initiator_id else "declined"
+        if user_id == initiator_id and not joined and call.answered_at is None:
+            reason = "cancelled"
+        elif joined or user_id == initiator_id:
+            reason = "left"
+        else:
+            reason = "declined"
         await self._publish_event(
             room_id=room_id,
             event_type="chat.call.left",
@@ -436,6 +441,7 @@ class CallService:
 
     async def end(self, *, call_id: str, user_id: str) -> CallSessionResponse:
         call = await self._get_call_for_user(call_id, user_id)
+        await self._ensure_call_manager(call, actor_id=user_id)
         ended_reason = "ended" if call.answered_at else "cancelled"
         try:
             call = await self._end_call(

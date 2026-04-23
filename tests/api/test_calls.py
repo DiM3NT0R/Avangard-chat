@@ -394,6 +394,109 @@ def test_call_end_returns_503_when_livekit_room_delete_fails(client: TestClient)
     assert call_doc.status == "ringing"
 
 
+def test_non_manager_cannot_force_end_call(client: TestClient):
+    owner = register_user(client, "force-end-owner")
+    actor = register_user(client, "force-end-actor")
+    member = register_user(client, "force-end-member")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[actor["user"]["id"], member["user"]["id"]],
+        name="force-end-room",
+    )
+
+    invite_response = client.post(
+        f"/call/room/{room['id']}/invite",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert invite_response.status_code == 200
+    call = invite_response.json()
+
+    end_response = client.post(
+        f"/call/{call['id']}/end",
+        headers=auth_headers(actor["access_token"]),
+    )
+    assert end_response.status_code == 403
+    assert end_response.json() == {
+        "detail": "You do not have permission to manage this call"
+    }
+
+    active_response = client.get(
+        f"/call/room/{room['id']}/active",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert active_response.status_code == 200
+    assert active_response.json()["status"] == "ringing"
+
+
+def test_room_owner_can_force_end_call_started_by_other_member(client: TestClient):
+    owner = register_user(client, "owner-force-end-owner")
+    initiator = register_user(client, "owner-force-end-initiator")
+    member = register_user(client, "owner-force-end-member")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[initiator["user"]["id"], member["user"]["id"]],
+        name="owner-force-end-room",
+    )
+
+    invite_response = client.post(
+        f"/call/room/{room['id']}/invite",
+        headers=auth_headers(initiator["access_token"]),
+    )
+    assert invite_response.status_code == 200
+    call = invite_response.json()
+
+    end_response = client.post(
+        f"/call/{call['id']}/end",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert end_response.status_code == 200
+    assert end_response.json()["status"] == "ended"
+    assert end_response.json()["ended_reason"] == "cancelled"
+
+
+def test_initiator_leave_before_answer_publishes_cancelled_reason(client: TestClient):
+    owner = register_user(client, "initiator-cancel-owner")
+    member = register_user(client, "initiator-cancel-member")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[member["user"]["id"]],
+        name="initiator-cancel-room",
+    )
+
+    with (
+        client.websocket_connect(
+            _ws_url(room["id"]),
+            subprotocols=_ws_subprotocols(owner["access_token"]),
+        ) as owner_ws,
+        client.websocket_connect(
+            _ws_url(room["id"]),
+            subprotocols=_ws_subprotocols(member["access_token"]),
+        ) as member_ws,
+    ):
+        invite_response = client.post(
+            f"/call/room/{room['id']}/invite",
+            headers=auth_headers(owner["access_token"]),
+        )
+        assert invite_response.status_code == 200
+        call = invite_response.json()
+
+        leave_response = client.post(
+            f"/call/{call['id']}/leave",
+            headers=auth_headers(owner["access_token"]),
+        )
+        assert leave_response.status_code == 200
+        assert leave_response.json()["status"] == "ended"
+        assert leave_response.json()["ended_reason"] == "cancelled"
+
+        owner_left = _ws_receive_until(owner_ws, "chat.call.left")
+        member_left = _ws_receive_until(member_ws, "chat.call.left")
+        assert owner_left["payload"]["reason"] == "cancelled"
+        assert member_left["payload"]["reason"] == "cancelled"
+
+
 def test_invite_conflicts_when_call_is_already_active(client: TestClient):
     owner = register_user(client, "conflict-owner")
     member = register_user(client, "conflict-member")
