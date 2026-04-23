@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import time
 
 import pytest
 
@@ -121,18 +120,64 @@ def test_message_delete_removes_it_from_search(client):
     )
     assert delete_response.status_code == 200
 
-    after_delete_payload = None
-    for _ in range(30):
-        after_delete = client.get(
-            "/message/search?q=keyword-to-delete",
-            headers=auth_headers(owner["access_token"]),
-        )
-        assert after_delete.status_code == 200
-        after_delete_payload = after_delete.json()
-        if after_delete_payload == {"items": [], "next_cursor": None}:
-            break
-        time.sleep(0.05)
-    assert after_delete_payload == {"items": [], "next_cursor": None}
+    after_delete = client.get(
+        "/message/search?q=keyword-to-delete",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert after_delete.status_code == 200
+    assert after_delete.json() == {"items": [], "next_cursor": None}
+
+
+def test_message_search_hides_deleted_messages_even_with_stale_search_hits(
+    client,
+    monkeypatch,
+):
+    owner = register_user(client, "search-stale-hit-owner")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[],
+        name="search-stale-hit-room",
+    )
+    message = create_message(
+        client,
+        owner["access_token"],
+        room["id"],
+        text="stale-index-hit",
+    )
+
+    delete_response = client.delete(
+        f"/message/{message['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert delete_response.status_code == 200
+
+    class StaleSearchService:
+        async def search_message_ids_by_page(
+            self,
+            *,
+            query: str,
+            room_ids: list[str],
+            limit: int,
+            page: int,
+        ) -> tuple[list[str], bool]:
+            assert query == "stale-index-hit"
+            assert room["id"] in room_ids
+            assert limit == 20
+            assert page == 1
+            return [message["id"]], False
+
+    monkeypatch.setattr(
+        "app.modules.system.dependencies.get_typesense_service_singleton",
+        lambda: StaleSearchService(),
+    )
+
+    response = client.get(
+        "/message/search?q=stale-index-hit",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "next_cursor": None}
 
 
 def test_message_search_supports_pagination(client):

@@ -528,6 +528,8 @@ class MessageService:
                     )
             message.is_deleted = True
             await message.save()
+        await self.typesense.delete_message(message_id=message_id)
+        await self.dragonfly.invalidate_message_owner_cache(message_id)
         await self.cleanup_jobs.enqueue_message_delete_cleanup(message_id=message_id)
         logger.info(
             "event=message.delete user_id=%s message_id=%s already_deleted=%s",
@@ -701,7 +703,7 @@ class MessageService:
         ordered_messages = [
             found_by_id[message_id]
             for message_id in message_ids
-            if message_id in found_by_id
+            if message_id in found_by_id and not found_by_id[message_id].is_deleted
         ]
         logger.info(
             (
