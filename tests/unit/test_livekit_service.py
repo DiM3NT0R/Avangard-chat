@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 
+import httpx
 import jwt
 
 from app.platform.backends.livekit.service import LiveKitService
@@ -16,13 +17,20 @@ class _FakeResponse:
         return self._payload
 
     def raise_for_status(self) -> None:
-        raise RuntimeError(f"http {self.status_code}")
+        request = httpx.Request("POST", "http://livekit.test")
+        response = httpx.Response(self.status_code, request=request)
+        raise httpx.HTTPStatusError(
+            f"http {self.status_code}",
+            request=request,
+            response=response,
+        )
 
 
 class _FakeAdapter:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str, dict]] = []
         self.response = _FakeResponse(200, {})
+        self.error: Exception | None = None
         self.started = False
         self.stopped = False
 
@@ -33,6 +41,8 @@ class _FakeAdapter:
         self.stopped = True
 
     async def post_json(self, path: str, *, token: str, payload: dict) -> _FakeResponse:
+        if self.error is not None:
+            raise self.error
         self.calls.append((path, token, payload))
         return self.response
 
@@ -102,3 +112,50 @@ def test_livekit_delete_room_ignores_not_found_errors() -> None:
     asyncio.run(service.delete_room(room_id="room-123"))
 
     assert adapter.calls[0][0] == "/twirp/livekit.RoomService/DeleteRoom"
+
+
+def test_livekit_ping_calls_room_list_endpoint() -> None:
+    adapter = _FakeAdapter()
+    service = _service(adapter)
+
+    result = asyncio.run(service.ping())
+
+    assert result is True
+    assert adapter.calls[0][0] == "/twirp/livekit.RoomService/ListRooms"
+    assert adapter.calls[0][2] == {}
+
+
+def test_livekit_ping_wraps_transport_errors() -> None:
+    adapter = _FakeAdapter()
+    adapter.error = OSError("livekit down")
+    service = _service(adapter)
+
+    try:
+        asyncio.run(service.ping())
+    except RuntimeError as exc:
+        assert str(exc) == "LiveKit health check failed"
+    else:
+        raise AssertionError("Expected LiveKit ping failure")
+
+
+def test_livekit_remove_participant_ignores_not_found_errors() -> None:
+    adapter = _FakeAdapter()
+    adapter.response = _FakeResponse(404, {"code": "not_found"})
+    service = _service(adapter)
+
+    asyncio.run(service.remove_participant(room_id="room-123", user_id="user-123"))
+
+    assert adapter.calls[0][0] == "/twirp/livekit.RoomService/RemoveParticipant"
+
+
+def test_livekit_delete_room_raises_on_non_allowed_errors() -> None:
+    adapter = _FakeAdapter()
+    adapter.response = _FakeResponse(500, {"code": "internal"})
+    service = _service(adapter)
+
+    try:
+        asyncio.run(service.delete_room(room_id="room-123"))
+    except RuntimeError as exc:
+        assert str(exc) == "LiveKit room deletion failed"
+    else:
+        raise AssertionError("Expected delete_room failure")
