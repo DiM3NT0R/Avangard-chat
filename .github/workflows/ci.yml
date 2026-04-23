@@ -143,8 +143,9 @@ jobs:
             }
 
       - name: Upload unit and API coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
+          version: v11.2.7
           use_oidc: true
           files: ./coverage-unit-api.xml
           flags: unit-api
@@ -203,8 +204,9 @@ jobs:
           --cov-report=xml:coverage-integration-dragonfly.xml
 
       - name: Upload Dragonfly integration coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
+          version: v11.2.7
           use_oidc: true
           files: ./coverage-integration-dragonfly.xml
           flags: integration-dragonfly
@@ -269,8 +271,9 @@ jobs:
           --cov-report=xml:coverage-integration-typesense.xml
 
       - name: Upload Typesense integration coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
         with:
+          version: v11.2.7
           use_oidc: true
           files: ./coverage-integration-typesense.xml
           flags: integration-typesense
