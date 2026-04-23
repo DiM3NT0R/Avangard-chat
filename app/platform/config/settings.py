@@ -154,10 +154,10 @@ class Settings(BaseSettings):
 
     livekit_url: str = "ws://localhost:7880"
     livekit_api_url: str = "http://livekit:7880"
-    livekit_api_key: str = "devkey"
-    livekit_api_secret: str = "secret"
+    livekit_api_key: str
+    livekit_api_secret: str
     livekit_room_prefix: str = "chat-room"
-    livekit_token_ttl_seconds: int = 60
+    livekit_token_ttl_seconds: int = 600
     livekit_connect_timeout_seconds: float = 2.0
     livekit_read_timeout_seconds: float = 2.0
 
