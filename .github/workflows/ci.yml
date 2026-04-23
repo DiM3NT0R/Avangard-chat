@@ -23,6 +23,12 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check conventional PR title
+        if: github.event_name == 'pull_request'
+        run: >-
+          uv run --group dev python scripts/check_pr_title.py
+          "${{ github.event.pull_request.title }}"
+
       - name: Run Ruff
         run: uv run --group dev ruff check .
 
