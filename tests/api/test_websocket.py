@@ -571,6 +571,70 @@ def test_websocket_requires_auth_subprotocol(client: TestClient):
     assert exc_info.value.code == 1008
 
 
+def test_websocket_disconnects_removed_member_before_room_fanout(client: TestClient):
+    owner = register_user(client, "ws-removed-owner")
+    member = register_user(client, "ws-removed-member")
+    room = create_room(
+        client,
+        owner["access_token"],
+        member_ids=[member["user"]["id"]],
+        name="removed-member-room",
+    )
+
+    with (
+        client.websocket_connect(
+            _ws_url(room["id"]),
+            subprotocols=_ws_subprotocols(owner["access_token"]),
+        ) as owner_ws,
+        client.websocket_connect(
+            _ws_url(room["id"]),
+            subprotocols=_ws_subprotocols(member["access_token"]),
+        ) as member_ws,
+    ):
+        remove_response = client.delete(
+            f"/room/{room['id']}/members/{member['user']['id']}",
+            headers=auth_headers(owner["access_token"]),
+        )
+        assert remove_response.status_code == 200
+
+        owner_ws.send_json(_ws_create_message_event("after removal"))
+        owner_event = _ws_receive_until(owner_ws, "chat.message.created")
+        assert owner_event["payload"]["text"] == "after removal"
+
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            member_ws.receive_json()
+
+    assert exc_info.value.code == 1008
+
+
+def test_websocket_disconnects_after_logout_all_revokes_access_token(
+    client: TestClient,
+):
+    user = register_user(client, "ws-logout-all-user")
+    room = create_room(
+        client,
+        user["access_token"],
+        member_ids=[],
+        name="logout-all-room",
+    )
+
+    with client.websocket_connect(
+        _ws_url(room["id"]),
+        subprotocols=_ws_subprotocols(user["access_token"]),
+    ) as ws:
+        logout_all_response = client.post(
+            "/auth/logout-all",
+            headers=auth_headers(user["access_token"]),
+        )
+        assert logout_all_response.status_code == 200
+
+        ws.send_json({"type": "chat.presence.get", "payload": {}})
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            ws.receive_json()
+
+    assert exc_info.value.code == 1008
+
+
 def test_websocket_message_create_requires_idempotency_key(client: TestClient):
     owner = register_user(client, "ws-idempotency-required-owner")
     room = create_room(

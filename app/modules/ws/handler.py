@@ -178,6 +178,7 @@ async def handle_room_chat(
         websocket,
         room_id,
         payload["sub"],
+        payload,
         subprotocol=CHAT_SUBPROTOCOL,
     )
     user_id = payload["sub"]
@@ -198,6 +199,10 @@ async def handle_room_chat(
                 continue
 
             last_activity_at = monotonic()
+
+            if not await manager.ensure_connection_authorized(websocket):
+                await websocket.close(code=1008)
+                break
 
             try:
                 event_type = data.get("type")
