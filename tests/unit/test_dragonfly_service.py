@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from fnmatch import fnmatch
 from typing import Any
 
 import pytest
@@ -21,6 +22,7 @@ class FakeAdapter:
         self.delete_result = 0
         self.lock_token: str | None = "lock-token"
         self.text_values: dict[str, str] = {}
+        self.scan_key_results: dict[str, list[str]] = {}
         self.subscribe_messages: list[tuple[str, dict[str, Any]]] = []
         self.zset_values: dict[str, dict[str, float]] = {}
 
@@ -132,6 +134,14 @@ class FakeAdapter:
         if "get_text" in self.raise_methods:
             raise RuntimeError("boom")
         return self.text_values.get(key)
+
+    async def scan_keys(self, pattern: str) -> list[str]:
+        self.calls.append(("scan_keys", pattern))
+        if "scan_keys" in self.raise_methods:
+            raise RuntimeError("boom")
+        if pattern in self.scan_key_results:
+            return list(self.scan_key_results[pattern])
+        return sorted(key for key in self.text_values if fnmatch(key, pattern))
 
     async def touch(self, key: str, ttl_seconds: int) -> None:
         self.calls.append(("touch", key, ttl_seconds))
@@ -368,6 +378,49 @@ def test_clear_ws_presence_removes_from_room_online_zset() -> None:
     assert len(zrem_calls) == 1
     assert zrem_calls[0][1] == "test-prefix:ws:presence:room:room-1:online"
     assert zrem_calls[0][2] == "user-1:conn-1"
+
+
+def test_clear_ws_presence_sets_last_seen_when_final_connection_is_gone() -> None:
+    adapter = FakeAdapter()
+    service = _service(adapter)
+    pattern = "test-prefix:ws:presence:user:user-1:room:*:conn:*"
+    adapter.scan_key_results[pattern] = []
+
+    asyncio.run(
+        service.clear_ws_presence(
+            room_id="room-1",
+            user_id="user-1",
+            connection_id="conn-1",
+        )
+    )
+
+    set_calls = [call for call in adapter.calls if call[0] == "set_text"]
+    assert len(set_calls) == 1
+    assert set_calls[0][1] == "test-prefix:ws:presence:user:user-1:last-seen"
+
+
+def test_get_user_presence_reports_online_when_connection_exists() -> None:
+    adapter = FakeAdapter()
+    adapter.text_values[
+        "test-prefix:ws:presence:user:user-1:room:room-1:conn:conn-1"
+    ] = "1"
+    service = _service(adapter)
+
+    is_online, last_seen = asyncio.run(service.get_user_presence("user-1"))
+
+    assert is_online is True
+    assert last_seen is None
+
+
+def test_get_user_presence_returns_last_seen_when_offline() -> None:
+    adapter = FakeAdapter()
+    adapter.text_values["test-prefix:ws:presence:user:user-1:last-seen"] = "1710000000"
+    service = _service(adapter)
+
+    is_online, last_seen = asyncio.run(service.get_user_presence("user-1"))
+
+    assert is_online is False
+    assert last_seen == datetime.fromtimestamp(1710000000, UTC)
 
 
 def test_acquire_ws_idempotency_lock_returns_bypass_token_on_open_failure() -> None:

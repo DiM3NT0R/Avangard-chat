@@ -65,6 +65,10 @@ def ws_presence_user_conn(
     return f"{prefix}:ws:presence:user:{user_id}:room:{room_id}:conn:{connection_id}"
 
 
+def ws_presence_user_conn_pattern(prefix: str, user_id: str) -> str:
+    return f"{prefix}:ws:presence:user:{user_id}:room:*:conn:*"
+
+
 def ws_presence_room_online_zset(prefix: str, room_id: str) -> str:
     return f"{prefix}:ws:presence:room:{room_id}:online"
 
@@ -75,6 +79,10 @@ def ws_presence_conn_member(user_id: str, connection_id: str) -> str:
 
 def ws_typing_state(prefix: str, room_id: str, user_id: str) -> str:
     return f"{prefix}:ws:typing:room:{room_id}:user:{user_id}"
+
+
+def ws_presence_user_last_seen(prefix: str, user_id: str) -> str:
+    return f"{prefix}:ws:presence:user:{user_id}:last-seen"
 
 
 def auth_revoked_jti(prefix: str, jti: str) -> str:

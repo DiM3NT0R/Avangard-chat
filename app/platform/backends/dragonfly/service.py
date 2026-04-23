@@ -247,10 +247,20 @@ class DragonflyService:
         )
         online_key = keys.ws_presence_room_online_zset(self._prefix, room_id)
         online_member = keys.ws_presence_conn_member(user_id, connection_id)
+        user_presence_pattern = keys.ws_presence_user_conn_pattern(
+            self._prefix, user_id
+        )
+        last_seen_key = keys.ws_presence_user_last_seen(self._prefix, user_id)
         try:
             await self._adapter.delete(room_key)
             await self._adapter.delete(user_key)
             await self._adapter.zrem(online_key, online_member)
+            remaining_connections = await self._adapter.scan_keys(user_presence_pattern)
+            if not remaining_connections:
+                await self._adapter.set_text(
+                    last_seen_key,
+                    str(int(datetime.now(UTC).timestamp())),
+                )
         except DRAGONFLY_BACKEND_ERRORS as exc:
             await self._handle_backend_failure(
                 policy=self._settings.dragonfly.fail_policy.ws_presence,
@@ -285,6 +295,28 @@ class DragonflyService:
             if user_id:
                 online_users.add(user_id)
         return sorted(online_users)
+
+    async def get_user_presence(self, user_id: str) -> tuple[bool, datetime | None]:
+        user_presence_pattern = keys.ws_presence_user_conn_pattern(
+            self._prefix, user_id
+        )
+        last_seen_key = keys.ws_presence_user_last_seen(self._prefix, user_id)
+        try:
+            connection_keys = await self._adapter.scan_keys(user_presence_pattern)
+            if connection_keys:
+                return True, None
+            last_seen = await self._adapter.get_text(last_seen_key)
+        except DRAGONFLY_BACKEND_ERRORS as exc:
+            await self._handle_backend_failure(
+                policy=self._settings.dragonfly.fail_policy.ws_presence,
+                feature="ws_presence_user_get",
+                exc=exc,
+            )
+            return False, None
+
+        if last_seen is None:
+            return False, None
+        return False, datetime.fromtimestamp(int(last_seen), UTC)
 
     async def set_ws_typing_state(
         self,
