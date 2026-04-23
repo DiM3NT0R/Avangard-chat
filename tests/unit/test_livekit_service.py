@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import httpx
 import jwt
+import pytest
 
 from app.platform.backends.livekit.service import LiveKitService
 from app.platform.config.settings import settings
@@ -24,6 +25,11 @@ class _FakeResponse:
             request=request,
             response=response,
         )
+
+
+class _NonJsonResponse(_FakeResponse):
+    def json(self) -> dict:
+        raise ValueError("not json")
 
 
 class _FakeAdapter:
@@ -110,6 +116,17 @@ def test_livekit_create_join_token_contains_expected_claims() -> None:
     assert expires_at > datetime.now(UTC)
 
 
+def test_livekit_startup_and_shutdown_delegate_to_adapter() -> None:
+    adapter = _FakeAdapter()
+    service = _service(adapter)
+
+    asyncio.run(service.startup())
+    asyncio.run(service.shutdown())
+
+    assert adapter.started is True
+    assert adapter.stopped is True
+
+
 def test_livekit_remove_participant_calls_expected_endpoint() -> None:
     adapter = _FakeAdapter()
     service = _service(adapter)
@@ -144,6 +161,16 @@ def test_livekit_ping_calls_room_list_endpoint() -> None:
     assert adapter.calls[0][2] == {}
 
 
+def test_livekit_ping_returns_false_when_backend_returns_non_200() -> None:
+    adapter = _FakeAdapter()
+    adapter.response = _FakeResponse(503, {"code": "unavailable"})
+    service = _service(adapter)
+
+    result = asyncio.run(service.ping())
+
+    assert result is False
+
+
 def test_livekit_ping_wraps_transport_errors() -> None:
     adapter = _FakeAdapter()
     adapter.error = OSError("livekit down")
@@ -167,9 +194,35 @@ def test_livekit_remove_participant_ignores_not_found_errors() -> None:
     assert adapter.calls[0][0] == "/twirp/livekit.RoomService/RemoveParticipant"
 
 
+def test_livekit_remove_participant_raises_on_non_allowed_errors() -> None:
+    adapter = _FakeAdapter()
+    adapter.response = _FakeResponse(500, {"code": "internal"})
+    service = _service(adapter)
+
+    try:
+        asyncio.run(service.remove_participant(room_id="room-123", user_id="user-123"))
+    except RuntimeError as exc:
+        assert str(exc) == "LiveKit participant removal failed"
+    else:
+        raise AssertionError("Expected remove_participant failure")
+
+
 def test_livekit_delete_room_raises_on_non_allowed_errors() -> None:
     adapter = _FakeAdapter()
     adapter.response = _FakeResponse(500, {"code": "internal"})
+    service = _service(adapter)
+
+    try:
+        asyncio.run(service.delete_room(room_id="room-123"))
+    except RuntimeError as exc:
+        assert str(exc) == "LiveKit room deletion failed"
+    else:
+        raise AssertionError("Expected delete_room failure")
+
+
+def test_livekit_delete_room_raises_when_error_response_is_not_json() -> None:
+    adapter = _FakeAdapter()
+    adapter.response = _NonJsonResponse(500)
     service = _service(adapter)
 
     try:
@@ -193,3 +246,11 @@ def test_livekit_join_token_always_uses_hs256() -> None:
     payload = jwt.decode(token, "lk-api-secret", algorithms=["HS256"])
     assert payload["iss"] == "lk-api-key"
     assert payload["sub"] == "user-123"
+
+
+def test_raise_unless_allowed_error_raises_for_non_json_errors() -> None:
+    with pytest.raises(httpx.HTTPStatusError):
+        LiveKitService._raise_unless_allowed_error(
+            _NonJsonResponse(500),
+            allowed_codes={"not_found"},
+        )
