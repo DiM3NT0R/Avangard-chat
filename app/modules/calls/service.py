@@ -76,6 +76,20 @@ class CallService:
         await self.room_service.get_for_user(room_id, user_id)
         return call
 
+    async def _get_call_for_participant(
+        self,
+        call_id: str,
+        user_id: str,
+    ) -> tuple[CallSession, CallParticipantState]:
+        call = await self._get_call_or_404(call_id)
+        state = self._participant_state(call, user_id)
+        if state is None:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permission to access this call",
+            )
+        return call, state
+
     async def _get_live_call_for_room(self, room_id: str) -> CallSession | None:
         try:
             room_object_id = ObjectId(room_id)
@@ -583,9 +597,8 @@ class CallService:
         call_id: str,
         user_id: str,
     ) -> CallSessionResponse:
-        call = await self._get_call_for_user(call_id, user_id)
-        state = self._participant_state(call, user_id)
-        if state is None or state.missed_at is None:
+        call, state = await self._get_call_for_participant(call_id, user_id)
+        if state.missed_at is None:
             raise HTTPException(status_code=400, detail="Call is not marked as missed")
         if state.missed_acknowledged_at is None:
             state.missed_acknowledged_at = datetime.now(UTC)

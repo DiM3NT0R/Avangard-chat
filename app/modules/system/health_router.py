@@ -1,8 +1,10 @@
 import asyncio
 
+import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from pymongo.errors import PyMongoError
+from redis.exceptions import RedisError
 
 from app.modules.system.dependencies import (
     get_dragonfly_service,
@@ -46,7 +48,7 @@ async def ready(
         checks["dragonfly"] = await dragonfly.ping()
     except asyncio.CancelledError:
         raise
-    except (OSError, TimeoutError, RuntimeError):
+    except (OSError, TimeoutError, RuntimeError, RedisError):
         checks["dragonfly"] = False
 
     try:
@@ -60,7 +62,7 @@ async def ready(
         checks["typesense"] = await typesense.ping()
     except asyncio.CancelledError:
         raise
-    except (OSError, TimeoutError, RuntimeError):
+    except (OSError, TimeoutError, RuntimeError, httpx.HTTPError):
         checks["typesense"] = False
 
     status = "ok" if all(checks.values()) else "degraded"
