@@ -1,7 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from starlette.responses import StreamingResponse
 
-from app.modules.system.dependencies import get_dragonfly_service, verify_token, get_s3_service
+from app.modules.system.dependencies import (
+    get_dragonfly_service,
+    verify_token,
+    get_s3_service,
+)
 from app.modules.users.model import User
 from app.modules.users.schemas import UserResponse, serialize_user_response
 from app.platform.backends.dragonfly.service import DragonflyService
