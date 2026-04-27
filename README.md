@@ -16,11 +16,10 @@
 Бэкенд чат-приложения на FastAPI:
 - JWT-аутентификация и refresh-сессии
 - групповые чаты и личные сообщения
-- realtime-обмен сообщениями через ws
+- realtime-обмен сообщениями
 - аудиозвонки через LiveKit
 - зашифрованное хранение сообщений
 - полнотекстовый поиск (Typesense)
-- счётчики непрочитанных
 
 ## Что реализовано
 
@@ -61,11 +60,11 @@
 
 ## Шифрование и хранение сообщений
 
-- Текст сообщений хранится в MongoDB в зашифрованном виде.
+- Текст сообщений хранится в MongoDB в зашифрованном виде
 - Алгоритм: `AES-256-GCM`
-- Для каждого сообщения используется отдельный случайный nonce.
+- Для каждого сообщения используется отдельный случайный nonce
 - Контекст привязывает шифртекст к `room_id` и `sender_id`
-- Хранятся поля: ciphertext, nonce, key id, aad.
+- Хранятся поля: ciphertext, nonce, key id, aad
 - Удалённые сообщения soft-delete (`is_deleted=true`) и в API отдаются как `[deleted]`
 
 ## Фоновые воркеры
@@ -86,17 +85,13 @@ docker compose up -d --build
 
 API: `http://localhost:8000`
 
-LiveKit для локальной разработки:
+LiveKit:
 - Signal/API: `ws://localhost:7880`
 - ICE TCP fallback: `localhost:7881`
 - ICE UDP mux: `localhost:7882/udp`
 
-Compose stack использует:
-- `compose.yml`
-- `deploy/livekit.yaml`
-
-Если фронт запускается вне докера, он должен подключаться к `LIVEKIT_URL`
-По дефолту `ws://localhost:7880`, а бэк ходит к LiveKit по `LIVEKIT_API_URL=http://livekit:7880`
+Если фронт запускается вне докера, он должен подключаться к `LIVEKIT_URL`.
+Бэк ходит к LiveKit по `LIVEKIT_API_URL=http://livekit:7880`
 
 Некоторые эндпоинты:
 - Swagger UI: `http://localhost:8000/docs`
