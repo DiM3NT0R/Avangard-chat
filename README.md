@@ -65,7 +65,7 @@
 - Для каждого сообщения используется отдельный случайный nonce
 - Контекст привязывает шифртекст к `room_id` и `sender_id`
 - Хранятся поля: ciphertext, nonce, key id, aad
-- Удалённые сообщения soft-delete (`is_deleted=true`) и в API отдаются как `[deleted]`
+- Soft-delete (`is_deleted=true`) сообщений, в API отдаются как `[deleted]`
 
 ## Фоновые воркеры
 
