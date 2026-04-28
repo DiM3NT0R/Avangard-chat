@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from app.modules.auth import router as auth
+from app.modules.calls import router as calls
 from app.modules.messages import router as messages
 from app.modules.messages.unread.worker import UnreadCounterReconciliationWorker
 from app.modules.rooms import router as rooms
@@ -18,6 +19,7 @@ from app.modules.users import router as users
 from app.modules.ws import router as ws
 from app.modules.ws.manager import manager
 from app.platform.backends.dragonfly.container import get_dragonfly_service_singleton
+from app.platform.backends.livekit.container import get_livekit_service_singleton
 from app.platform.backends.s3.container import get_s3_service_singleton
 from app.platform.backends.typesense.container import get_typesense_service_singleton
 from app.platform.config.settings import settings
@@ -26,6 +28,7 @@ from app.platform.config.settings import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     dragonfly = get_dragonfly_service_singleton()
+    livekit = get_livekit_service_singleton()
     typesense = get_typesense_service_singleton()
     cleanup_job_worker = CleanupJobWorker(
         service=get_cleanup_job_service(),
@@ -37,6 +40,7 @@ async def lifespan(app: FastAPI):
     )
     s3_service = get_s3_service_singleton()
     await dragonfly.startup()
+    await livekit.startup()
     await typesense.startup()
     try:
         await init_db()
@@ -50,6 +54,7 @@ async def lifespan(app: FastAPI):
         await cleanup_job_worker.shutdown()
         await manager.shutdown()
         await typesense.shutdown()
+        await livekit.shutdown()
         await dragonfly.shutdown()
 
 
@@ -59,6 +64,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+app.include_router(calls.router, prefix="/call", tags=["Calls"])
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(users.router, prefix="/user", tags=["Users"])
 app.include_router(rooms.router, prefix="/room", tags=["Rooms"])
