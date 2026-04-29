@@ -20,6 +20,7 @@ from app.modules.ws import router as ws
 from app.modules.ws.manager import manager
 from app.platform.backends.dragonfly.container import get_dragonfly_service_singleton
 from app.platform.backends.livekit.container import get_livekit_service_singleton
+from app.platform.backends.s3.container import get_s3_service_singleton
 from app.platform.backends.typesense.container import get_typesense_service_singleton
 from app.platform.config.settings import settings
 
@@ -37,11 +38,13 @@ async def lifespan(app: FastAPI):
         service=get_unread_counter_service(),
         interval_seconds=settings.unread_reconcile_interval_seconds,
     )
+    s3_service = get_s3_service_singleton()
     await dragonfly.startup()
     await livekit.startup()
     await typesense.startup()
     try:
         await init_db()
+        await s3_service.init_s3()
         await manager.startup()
         await cleanup_job_worker.startup()
         await unread_reconcile_worker.startup()

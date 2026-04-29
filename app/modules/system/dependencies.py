@@ -17,6 +17,8 @@ from app.platform.backends.dragonfly.rate_limit import RateLimitService
 from app.platform.backends.dragonfly.service import DragonflyService
 from app.platform.backends.livekit.container import get_livekit_service_singleton
 from app.platform.backends.livekit.service import LiveKitService
+from app.platform.backends.s3.container import get_s3_service_singleton
+from app.platform.backends.s3.service import S3Service
 from app.platform.backends.typesense.container import get_typesense_service_singleton
 from app.platform.backends.typesense.service import TypesenseService
 from app.platform.config.settings import settings
@@ -140,6 +142,10 @@ def get_room_service(
     )
 
 
+def get_s3_service() -> S3Service:
+    return get_s3_service_singleton()
+
+
 def get_message_service(
     room_service: RoomService = Depends(get_room_service),
     dragonfly: DragonflyService = Depends(get_dragonfly_service),
@@ -147,6 +153,7 @@ def get_message_service(
     typesense: TypesenseService = Depends(get_typesense_service),
     unread_counters: UnreadCounterService = Depends(get_unread_counter_service),
     cleanup_jobs: CleanupJobService = Depends(get_cleanup_job_service),
+    s3_service: S3Service = Depends(get_s3_service),
 ) -> MessageService:
     return MessageService(
         room_service=room_service,
@@ -155,6 +162,7 @@ def get_message_service(
         typesense=typesense,
         unread_counters=unread_counters,
         cleanup_jobs=cleanup_jobs,
+        s3_service=s3_service,
     )
 
 

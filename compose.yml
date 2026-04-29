@@ -20,6 +20,9 @@ services:
       - MESSAGE_CURSOR_SECRET_KEY=change-me-message-cursor-secret
       - MESSAGE_ENCRYPTION_ACTIVE_KEY_ID=v1
       - 'MESSAGE_ENCRYPTION_KEYS={"v1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}'
+      - S3_URL=s3:9000
+      - S3_ACCESS_KEY=s3_admin
+      - S3_SECRET_KEY=s3_admin
     depends_on:
       mongodb:
         condition: service_healthy
@@ -29,6 +32,8 @@ services:
         condition: service_started
       typesense:
         condition: service_started
+      s3:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -101,6 +106,25 @@ services:
       - typesense_data:/data
     restart: unless-stopped
 
+  s3:
+    image: rustfs/rustfs:latest
+    container_name: rustfs
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      RUSTFS_ACCESS_KEY: s3_admin
+      RUSTFS_SECRET_KEY: s3_admin
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/health" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
 volumes:
   mongo_data:
   typesense_data:
+  rustfs_data:

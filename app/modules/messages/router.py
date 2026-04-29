@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile
+from starlette.responses import StreamingResponse
 
 from app.modules.messages.schemas import (
     MarkRoomReadResponse,
@@ -14,6 +15,7 @@ from app.modules.system.dependencies import (
     get_rate_limit_service,
     verify_token,
 )
+from app.modules.system.streaming_utils import stream_with_cleanup
 from app.platform.backends.dragonfly.rate_limit import RateLimitService
 from app.platform.http.errors import error_responses
 from app.platform.http.schemas import OperationOkResponse
@@ -138,6 +140,45 @@ async def edit_message(
         message_id=message_id,
         data=data,
         user_id=user["sub"],
+    )
+
+
+@router.post(
+    "/{message_id}/attachment",
+    response_model=MessageResponse,
+    responses=error_responses(400, 401, 404, 422),
+)
+async def upload_attachment(
+    message_id: str,
+    file: UploadFile,
+    user: dict = Depends(verify_token),
+    message_service: MessageService = Depends(get_message_service),
+):
+    return await message_service.add_attachment(
+        message_id=message_id,
+        file=file,
+        user_id=user["sub"],
+    )
+
+
+@router.get(
+    "/{message_id}/attachment/{attachment_id}",
+    responses=error_responses(400, 401, 404, 422),
+)
+async def download_attachment(
+    message_id: str,
+    attachment_id: str,
+    user: dict = Depends(verify_token),
+    message_service: MessageService = Depends(get_message_service),
+):
+    response = await message_service.get_attachment(
+        message_id=message_id,
+        attachment_id=attachment_id,
+        user_id=user["sub"],
+    )
+    return StreamingResponse(
+        content=stream_with_cleanup(response=response),
+        media_type=response.headers.get("content-type", "application/octet-stream"),
     )
 
 
