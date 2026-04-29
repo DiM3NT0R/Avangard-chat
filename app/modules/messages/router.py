@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Query, UploadFile
 from starlette.responses import StreamingResponse
 
-from app.modules.messages.model import Message
 from app.modules.messages.schemas import (
     MarkRoomReadResponse,
     MessageCreate,
@@ -155,10 +154,6 @@ async def upload_attachment(
     user: dict = Depends(verify_token),
     message_service: MessageService = Depends(get_message_service),
 ):
-    message = await Message.get(message_id)
-    if not message:
-        raise HTTPException(status_code=404, detail="Message not found")
-
     return await message_service.add_attachment(
         message_id=message_id,
         file=file,

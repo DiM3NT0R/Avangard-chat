@@ -1,6 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
@@ -189,9 +189,28 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         lambda: fake_livekit,
     )
 
+    async def mock_download(*args, **kwargs):
+        async def gen():
+            yield b"fake file content"
+
+        response = MagicMock()
+        response.headers = {"content-type": "text/plain"}
+        response.content = gen()
+        response.close = AsyncMock()
+        return response
+
     s3_mock = AsyncMock()
+    s3_mock.download_file = mock_download
+    s3_mock.upload_message_attachment = AsyncMock(
+        return_value=f"photos/{uuid4()}/test.jpg"
+    )
+    s3_mock.upload_user_avatar = AsyncMock(return_value=f"{uuid4()}/test.jpg")
     monkeypatch.setattr(
         "app.main.get_s3_service_singleton",
+        lambda: s3_mock,
+    )
+    monkeypatch.setattr(
+        "app.modules.system.dependencies.get_s3_service_singleton",
         lambda: s3_mock,
     )
 

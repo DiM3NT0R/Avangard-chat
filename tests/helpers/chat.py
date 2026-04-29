@@ -1,3 +1,6 @@
+import io
+
+from fastapi.openapi.models import Response
 from fastapi.testclient import TestClient
 
 from tests.helpers.auth import auth_headers
@@ -47,3 +50,57 @@ def create_message(
     )
     assert response.status_code == 200
     return response.json()
+
+
+def delete_message(
+    client: TestClient,
+    access_token: str,
+    message_id: str,
+):
+    response = client.delete(
+        f"/message/{message_id}",
+        headers=auth_headers(access_token),
+    )
+    assert response.status_code == 200
+
+
+def get_messages(
+    client: TestClient,
+    access_token: str,
+    room_id: str,
+) -> dict:
+    response = client.get(
+        f"/message/room/{room_id}",
+        headers=auth_headers(access_token),
+    )
+    assert response.status_code == 200
+    return response.json()
+
+
+def upload_attachment(
+    client: TestClient,
+    access_token: str,
+    message_id: str,
+    filename: str = "test.txt",
+    content_type: str = "text/plain",
+) -> Response:
+    file_content = b"some text inside file"
+    return client.post(
+        f"/message/{message_id}/attachment",
+        headers=auth_headers(access_token),
+        files={
+            "file": (filename, io.BytesIO(file_content), content_type),
+        },
+    )
+
+
+def download_attachment(
+    client: TestClient,
+    access_token: str,
+    message_id: str,
+    attachment_id: str,
+) -> Response:
+    return client.get(
+        f"/message/{message_id}/attachment/{attachment_id}",
+        headers=auth_headers(access_token),
+    )

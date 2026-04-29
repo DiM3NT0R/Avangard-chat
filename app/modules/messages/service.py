@@ -530,15 +530,16 @@ class MessageService:
                         user_id=member_id,
                         by=1,
                     )
+            for attachment in message.attachments:
+                await self.s3_service.delete_file(
+                    s3_settings.bucket_attachments, attachment.object_path
+                )
+            message.attachments = []
             message.is_deleted = True
             await message.save()
         await self.typesense.delete_message(message_id=message_id)
         await self.dragonfly.invalidate_message_owner_cache(message_id)
         await self.cleanup_jobs.enqueue_message_delete_cleanup(message_id=message_id)
-        for attachment in message.attachments:
-            await self.s3_service.delete_file(
-                s3_settings.bucket_attachments, attachment.object_path
-            )
         logger.info(
             "event=message.delete user_id=%s message_id=%s already_deleted=%s",
             user_id,
@@ -735,9 +736,8 @@ class MessageService:
         await self._ensure_message_owner(message, user_id)
         if message.is_deleted:
             raise HTTPException(status_code=422, detail="Message is deleted")
-        await message.fetch_link(Message.room)
         object_path = await self.s3_service.upload_message_attachment(
-            room_id=message.room.id,
+            room_id=str(message.room.ref.id),
             file=file,
         )
         if not object_path:
