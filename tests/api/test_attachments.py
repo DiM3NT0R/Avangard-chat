@@ -48,6 +48,32 @@ def test_upload_attachment_successful(client: TestClient):
     assert len(stored_message.attachments) == attachments_length
 
 
+def test_upload_attachment_unsupported(client: TestClient):
+    alice = register_user(client, "dm-alice")
+    bob = register_user(client, "dm-bob")
+
+    room = create_dm(client, alice["access_token"], bob["user"]["id"])
+
+    message = create_message(
+        client,
+        alice["access_token"],
+        room["id"],
+        text="here's the file you need",
+    )
+
+    assert len(message["attachments"]) == 0
+
+    response = upload_attachment(
+        client,
+        alice["access_token"],
+        message["id"],
+        filename="some-file.vcf",
+        content_type="text/x-vcard;charset=utf-8;",
+    )
+
+    assert response.status_code == 422
+
+
 def test_upload_attachment_message_deleted(client: TestClient):
     alice = register_user(client, "dm-alice")
     bob = register_user(client, "dm-bob")

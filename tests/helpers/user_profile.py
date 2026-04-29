@@ -21,13 +21,15 @@ def get_current_user(
 def upload_avatar(
     client: TestClient,
     access_token: str,
+    filename: str = "avatar.jpg",
+    content_type: str = "image/jpeg",
 ) -> Response:
     file_content = b"just some content"
     return client.post(
         "/user/me/avatar",
         headers=auth_headers(access_token),
         files={
-            "file": ("avatar.jpg", io.BytesIO(file_content), "image/jpeg"),
+            "file": (filename, io.BytesIO(file_content), content_type),
         },
     )
 

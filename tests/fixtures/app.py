@@ -200,17 +200,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
         return response
 
     s3_mock = AsyncMock()
-    s3_mock.download_file = mock_download
-    s3_mock.upload_message_attachment = AsyncMock(
-        return_value=f"photos/{uuid4()}/test.jpg"
-    )
-    s3_mock.upload_user_avatar = AsyncMock(return_value=f"{uuid4()}/test.jpg")
+    s3_mock.get_object = mock_download
     monkeypatch.setattr(
-        "app.main.get_s3_service_singleton",
-        lambda: s3_mock,
-    )
-    monkeypatch.setattr(
-        "app.modules.system.dependencies.get_s3_service_singleton",
+        "app.platform.backends.s3.container.get_s3_client_singleton",
         lambda: s3_mock,
     )
 
