@@ -149,6 +149,15 @@ class S3Settings(BaseModel):
     attachment_document_max_upload_size_bytes: int = Field(gt=0)
 
 
+class OpenAISettings(BaseModel):
+    base_url: str
+    api_key: str
+    summary_model: str
+    summary_max_messages: int
+    summary_max_chars_per_message: int
+
+
+
 class Settings(BaseSettings):
     mongodb_url: str
     db_name: str = "avangard"
@@ -243,6 +252,12 @@ class Settings(BaseSettings):
     s3_attachment_video_max_upload_size_bytes: int = 200 * 1024 * 1024
     s3_attachment_audio_max_upload_size_bytes: int = 50 * 1024 * 1024
     s3_attachment_document_max_upload_size_bytes: int = 50 * 1024 * 1024
+
+    ai_base_url: str = "https://api.groq.com/openai/v1"
+    ai_api_key: str
+    ai_summary_model: str = "llama-3.3-70b-versatile"
+    ai_summary_max_messages: int = 30
+    ai_summary_max_chars_per_message: int = 300
 
     model_config = SettingsConfigDict(env_file=".env")
 
@@ -452,6 +467,16 @@ class Settings(BaseSettings):
             attachment_document_max_upload_size_bytes=(
                 self.s3_attachment_document_max_upload_size_bytes
             ),
+        )
+
+    @property
+    def ai(self) -> OpenAISettings:
+        return OpenAISettings(
+            base_url=self.ai_base_url,
+            api_key=self.ai_api_key,
+            summary_model=self.ai_summary_model,
+            summary_max_messages=self.ai_summary_max_messages,
+            summary_max_chars_per_message=self.ai_summary_max_chars_per_message,
         )
 
 
