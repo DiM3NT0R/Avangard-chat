@@ -1,7 +1,6 @@
-from datetime import datetime, UTC
+from datetime import datetime
 from typing import Optional
 
-from bson import ObjectId
 from openai import AsyncOpenAI
 
 from app.modules.messages.model import Message
@@ -25,7 +24,6 @@ HARD_CAP = 100
 
 
 class SummaryService:
-
     @staticmethod
     def _build_conditions(
         room,
@@ -36,7 +34,7 @@ class SummaryService:
     ) -> list:
         conditions: list = [
             Message.room.id == room.id,
-            Message.is_deleted == False,
+            not Message.is_deleted,
         ]
 
         if from_dt:
@@ -48,9 +46,7 @@ class SummaryService:
             # User.id — строка (Keycloak sub), не ObjectId.
             # Ищем документы, где user_id НЕ встречается в массиве ссылок read_by.
             # $not + $elemMatch корректно обрабатывает и пустой массив.
-            conditions.append(
-                {"read_by": {"$not": {"$elemMatch": {"$id": user_id}}}}
-            )
+            conditions.append({"read_by": {"$not": {"$elemMatch": {"$id": user_id}}}})
 
         return conditions
 
