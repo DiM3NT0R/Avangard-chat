@@ -1,12 +1,18 @@
 from datetime import UTC, datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from app.modules.rooms.model import ChatRoom
+from app.modules.rooms.service import RoomService
 from app.modules.summary.schemas import SummaryResponse
 from app.modules.summary.service import SummaryService
-from app.modules.system.dependencies import verify_token
+from app.modules.system.dependencies import (
+    get_message_crypto,
+    get_room_service,
+    rate_limit_summary,
+    verify_token,
+)
+from app.platform.security.message_crypto import MessageCrypto
 
 router = APIRouter()
 
@@ -18,6 +24,9 @@ async def get_room_summary(
     from_dt: Optional[datetime] = None,
     to_dt: Optional[datetime] = None,
     user: dict = Depends(verify_token),
+    _: None = Depends(rate_limit_summary),
+    room_service: RoomService = Depends(get_room_service),
+    crypto: MessageCrypto = Depends(get_message_crypto),
 ):
     """
     Краткая выжимка сообщений. Режимы:
@@ -26,13 +35,12 @@ async def get_room_summary(
     - ?from_dt=&to_dt=      — за период (ISO 8601, напр. 2025-04-20T10:00:00Z)
     - комбинация: ?unread_only=true&from_dt=...&to_dt=...
     """
-    room = await ChatRoom.get(room_id)
-    if not room:
-        raise HTTPException(status_code=404, detail="Room not found")
+    await room_service.get_for_user(room_id, user["sub"])
 
     summary, count, was_capped, mode = await SummaryService.summarize_room(
         room_id=room_id,
         user_id=user["sub"],
+        crypto=crypto,
         from_dt=from_dt,
         to_dt=to_dt,
         unread_only=unread_only,

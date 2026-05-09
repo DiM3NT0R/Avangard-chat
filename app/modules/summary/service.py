@@ -1,15 +1,20 @@
 from datetime import datetime
 from typing import Optional
 
+import openai
+from fastapi import HTTPException
 from openai import AsyncOpenAI
 
 from app.modules.messages.model import Message
 from app.modules.rooms.model import ChatRoom
 from app.platform.config.settings import settings
+from app.platform.persistence.links import linked_document_id
+from app.platform.security.message_crypto import MessageCrypto
 
 _client = AsyncOpenAI(
     api_key=settings.ai.api_key,
     base_url=settings.ai.base_url,
+    timeout=30.0,
 )
 
 SYSTEM_PROMPT = (
@@ -24,6 +29,19 @@ HARD_CAP = 100
 
 
 class SummaryService:
+    @staticmethod
+    def _decrypt_message_text(crypto: MessageCrypto, message: Message) -> str:
+        return crypto.decrypt(
+            ciphertext=message.text_ciphertext,
+            nonce=message.text_nonce,
+            key_id=message.text_key_id,
+            aad=message.text_aad,
+            context={
+                "room_id": linked_document_id(message.room),
+                "sender_id": linked_document_id(message.sender),
+            },
+        )
+
     @staticmethod
     def _build_conditions(
         room,
@@ -69,6 +87,7 @@ class SummaryService:
     async def summarize_room(
         room_id: str,
         user_id: str,
+        crypto: MessageCrypto,
         from_dt: Optional[datetime] = None,
         to_dt: Optional[datetime] = None,
         unread_only: bool = False,
@@ -82,10 +101,8 @@ class SummaryService:
         conditions = SummaryService._build_conditions(
             room, user_id, from_dt, to_dt, unread_only
         )
-
         mode = SummaryService._detect_mode(unread_only, from_dt, to_dt)
 
-        # Для режима "recent" — берём последние N, иначе всё + HARD_CAP
         if mode == "recent":
             messages = (
                 await Message.find(*conditions)
@@ -94,9 +111,8 @@ class SummaryService:
                 .to_list()
             )
             messages.reverse()
-            was_capped = False  # В режиме "recent" cap — это норма, не флаг
+            was_capped = False
         else:
-            # Для диапазонных режимов: считаем сколько есть, потом берём HARD_CAP
             total_count = await Message.find(*conditions).count()
             messages = (
                 await Message.find(*conditions)
@@ -110,29 +126,52 @@ class SummaryService:
             label = "unread messages" if unread_only else "messages"
             return f"No {label} found for the given criteria.", 0, False, mode
 
-        # --- Сборка текста с жёстким обрезанием ---
         lines = []
         for msg in messages:
             await msg.fetch_link(Message.sender)
             sender = getattr(msg.sender, "username", "?")
             ts = msg.created_at.strftime("%d.%m %H:%M")
-            # Обрезаем длинные сообщения
-            text = msg.text[: settings.ai.summary_max_chars_per_message]
-            if len(msg.text) > settings.ai.summary_max_chars_per_message:
+
+            plain = SummaryService._decrypt_message_text(crypto, msg)  # ← дешифруем
+            max_chars = settings.ai.summary_max_chars_per_message
+            text = plain[:max_chars]
+            if len(plain) > max_chars:
                 text += "…"
+
             lines.append(f"[{ts}] {sender}: {text}")
 
         chat_text = "\n".join(lines)
 
-        response = await _client.chat.completions.create(
-            model=settings.ai.summary_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"Chat messages:\n\n{chat_text}"},
-            ],
-            max_tokens=300,
-            temperature=0.3,
-        )
+        try:
+            response = await _client.chat.completions.create(
+                model=settings.ai.summary_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Chat messages:\n\n{chat_text}"},
+                ],
+                max_tokens=300,
+                temperature=0.3,
+            )
+        except openai.APITimeoutError as exc:
+            raise HTTPException(
+                status_code=504,
+                detail="AI summarizer timed out, please try again later",
+            ) from exc
+        except openai.APIConnectionError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="Could not reach AI summarizer",
+            ) from exc
+        except openai.RateLimitError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="AI summarizer is temporarily unavailable, pls try again later",
+            ) from exc
+        except openai.InternalServerError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail="AI summarizer returned an error",
+            ) from exc
 
         summary = response.choices[0].message.content.strip()
         return summary, len(messages), was_capped, mode

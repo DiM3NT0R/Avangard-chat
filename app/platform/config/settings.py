@@ -157,6 +157,11 @@ class OpenAISettings(BaseModel):
     summary_max_chars_per_message: int
 
 
+class SummaryRateLimitSettings(BaseModel):
+    window_seconds: int
+    max_attempts: int
+
+
 class Settings(BaseSettings):
     mongodb_url: str
     db_name: str = "avangard"
@@ -253,10 +258,13 @@ class Settings(BaseSettings):
     s3_attachment_document_max_upload_size_bytes: int = 50 * 1024 * 1024
 
     ai_base_url: str = "https://api.groq.com/openai/v1"
-    ai_api_key: str = "test_token"
+    ai_api_key: str = "ai_api_key"
     ai_summary_model: str = "llama-3.3-70b-versatile"
     ai_summary_max_messages: int = 30
     ai_summary_max_chars_per_message: int = 300
+
+    summary_rate_limit_window_seconds: int = 60
+    summary_rate_limit_max_attempts: int = 10
 
     model_config = SettingsConfigDict(env_file=".env")
 
@@ -476,6 +484,13 @@ class Settings(BaseSettings):
             summary_model=self.ai_summary_model,
             summary_max_messages=self.ai_summary_max_messages,
             summary_max_chars_per_message=self.ai_summary_max_chars_per_message,
+        )
+
+    @property
+    def summary_rate_limit(self) -> SummaryRateLimitSettings:
+        return SummaryRateLimitSettings(
+            window_seconds=self.summary_rate_limit_window_seconds,
+            max_attempts=self.summary_rate_limit_max_attempts,
         )
 
 

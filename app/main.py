@@ -8,6 +8,7 @@ from app.modules.calls import router as calls
 from app.modules.messages import router as messages
 from app.modules.messages.unread.worker import UnreadCounterReconciliationWorker
 from app.modules.rooms import router as rooms
+from app.modules.summary import router as summary
 from app.modules.system import health_router as health
 from app.modules.system.cleanup_jobs.worker import CleanupJobWorker
 from app.modules.system.database import init_db
@@ -70,6 +71,7 @@ app.include_router(users.router, prefix="/user", tags=["Users"])
 app.include_router(rooms.router, prefix="/room", tags=["Rooms"])
 app.include_router(messages.router, prefix="/message", tags=["Messages"])
 app.include_router(ws.router, prefix="/ws", tags=["WebSockets"])
+app.include_router(summary.router, prefix="/summary", tags=["Summary"])
 
 
 def custom_openapi():
