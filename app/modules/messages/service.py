@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 from binascii import Error as BinasciiError
-from copy import copy
 from datetime import UTC, datetime
 from time import time
 
@@ -419,6 +418,25 @@ class MessageService:
         )
         return self._serialize_message(message_encrypted, text=text)
 
+    async def _copy_attachments(
+        self, attachments: list[Attachment], room_id: str
+    ) -> list[Attachment]:
+        copied_attachments = []
+        for attachment in attachments:
+            object_path = await self.s3_service.copy_message_attachment(
+                object_name_source=attachment.object_path,
+                room_id_target=room_id,
+                content_type=attachment.content_type,
+            )
+            copied_attachments.append(
+                Attachment(
+                    filename=attachment.filename,
+                    object_path=object_path,
+                    content_type=attachment.content_type,
+                )
+            )
+        return copied_attachments
+
     async def send(self, data: MessageCreate, sender_id: str) -> MessageResponse:
         room = await self.room_service.get_for_user(data.room_id, sender_id)
         sender = await self._get_user_or_404(sender_id)
@@ -810,6 +828,11 @@ class MessageService:
             await self.room_service.get_for_user(room_id, user_id)
         result = []
         for message in messages:
+            if message.is_deleted:
+                raise HTTPException(
+                    status_code=422, detail="Forwarded message mustn't be deleted"
+                )
+        for message in messages:
             decrypted_text = self._decrypt_text(message)
             encrypted = self._encrypt_text(
                 text=decrypted_text,
@@ -826,7 +849,9 @@ class MessageService:
                 text_aad=encrypted.aad,
                 read_by=[sender],
                 created_at=created_at,
-                attachments=copy(message.attachments),
+                attachments=await self._copy_attachments(
+                    message.attachments, str(target_room.id)
+                ),
                 original_sender=message.sender,
             )
             result.append(

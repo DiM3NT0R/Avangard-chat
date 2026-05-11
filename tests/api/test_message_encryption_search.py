@@ -807,3 +807,47 @@ def test_forward_message_source_room_no_access(client):
     )
 
     assert response.status_code == 403
+
+
+def test_forward_message_message_deleted(client):
+    user_forwarder = register_user(client, "user-forwarder")
+    regular_user = register_user(client, "regular-user")
+    source_room = create_room(
+        client,
+        user_forwarder["access_token"],
+        member_ids=[regular_user["user"]["id"]],
+        name="source-room",
+    )
+    target_room = create_room(
+        client,
+        user_forwarder["access_token"],
+        member_ids=[],
+        name="target-room",
+    )
+    first_message = create_message(
+        client,
+        user_forwarder["access_token"],
+        source_room["id"],
+        text="first message to forward",
+    )
+    second_message = create_message(
+        client,
+        regular_user["access_token"],
+        source_room["id"],
+        text="second message to forward",
+    )
+
+    delete_response = client.delete(
+        f"/message/{first_message['id']}",
+        headers=auth_headers(user_forwarder["access_token"]),
+    )
+    assert delete_response.status_code == 200
+
+    response = forward_messages(
+        client,
+        user_forwarder["access_token"],
+        message_ids=[first_message["id"], second_message["id"]],
+        target_room_id=target_room["id"],
+    )
+
+    assert response.status_code == 422
