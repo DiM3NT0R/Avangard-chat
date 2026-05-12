@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
+from app.modules.ai_assist import router as ai_assist
 from app.modules.auth import router as auth
 from app.modules.calls import router as calls
 from app.modules.messages import router as messages
@@ -72,6 +73,7 @@ app.include_router(rooms.router, prefix="/room", tags=["Rooms"])
 app.include_router(messages.router, prefix="/message", tags=["Messages"])
 app.include_router(ws.router, prefix="/ws", tags=["WebSockets"])
 app.include_router(summary.router, prefix="/summary", tags=["Summary"])
+app.include_router(ai_assist.router, prefix="/ai_assist", tags=["AiAssist"])
 
 
 def custom_openapi():
