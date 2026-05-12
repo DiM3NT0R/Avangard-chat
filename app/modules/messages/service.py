@@ -852,11 +852,28 @@ class MessageService:
                 attachments=await self._copy_attachments(
                     message.attachments, str(target_room.id)
                 ),
-                original_sender=message.sender,
+                original_sender=message.sender
+                if message.original_sender is None
+                else message.original_sender,
             )
-            result.append(
-                await self._send_encrypted(
+            try:
+                message_response = await self._send_encrypted(
                     forwarded_message, target_room, user_id, decrypted_text
                 )
-            )
+                result.append(message_response)
+            except Exception:
+                logger.error(
+                    f"Failed to forward msg {message.id} to {target_room.id}",
+                    exc_info=True,
+                )
+                for attachment in forwarded_message.attachments:
+                    try:
+                        await self.s3_service.delete_file(
+                            s3_settings.bucket_attachments, attachment.object_path
+                        )
+                    except Exception:
+                        logger.error(
+                            f"Failed to delete attachment {attachment.id}",
+                            exc_info=True,
+                        )
         return result

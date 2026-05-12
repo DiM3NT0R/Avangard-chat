@@ -682,6 +682,55 @@ def test_forward_message(client):
     assert response_json[1]["text"] == second_message["text"]
 
 
+def test_forward_forwarded_message(client):
+    user_forwarder = register_user(client, "user-forwarder")
+    regular_user = register_user(client, "regular-user")
+    source_room = create_room(
+        client,
+        user_forwarder["access_token"],
+        member_ids=[regular_user["user"]["id"]],
+        name="source-room",
+    )
+    target_room = create_room(
+        client,
+        user_forwarder["access_token"],
+        member_ids=[regular_user["user"]["id"]],
+        name="target-room",
+    )
+    message = create_message(
+        client,
+        user_forwarder["access_token"],
+        source_room["id"],
+        text="first message to forward",
+    )
+
+    response = forward_messages(
+        client,
+        user_forwarder["access_token"],
+        message_ids=[message["id"]],
+        target_room_id=target_room["id"],
+    )
+
+    assert response.status_code == 200
+    forwarded_message = response.json()[0]
+
+    response = forward_messages(
+        client,
+        regular_user["access_token"],
+        message_ids=[forwarded_message["id"]],
+        target_room_id=source_room["id"],
+    )
+
+    assert response.status_code == 200
+    response_json = response.json()
+
+    assert response_json[0]["original_sender_id"] == user_forwarder["user"]["id"]
+    assert response_json[0]["sender_id"] == regular_user["user"]["id"]
+    assert response_json[0]["id"] != forwarded_message["id"]
+    assert response_json[0]["room_id"] == source_room["id"]
+    assert response_json[0]["text"] == message["text"]
+
+
 def test_forward_message_target_room_no_access(client):
     user_forwarder = register_user(client, "user-forwarder")
     regular_user = register_user(client, "regular-user")
